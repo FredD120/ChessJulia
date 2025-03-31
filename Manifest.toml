@@ -762,9 +762,9 @@ version = "1.4.0+0"
 
 [[deps.logic]]
 deps = ["BenchmarkTools"]
-path = "C:\\Users\\fwdan\\JuliaProjects\\ChessGame\\logic"
+path = "C:\\Users\\fwdan\\JuliaProjects\\ChessJulia\\logic"
 uuid = "71af330d-9551-40af-bd9f-dd36b4d12b46"
-version = "0.0.5"
+version = "0.0.7"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]

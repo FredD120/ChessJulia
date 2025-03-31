@@ -49,10 +49,11 @@ function test_colour_pieces()
 end
 test_colour_pieces()
 
-function test_moves()
-    movestruct = Moves()
+function test_moveBB()
+    movestruct = Move_BB()
     @assert length(movestruct.knight) == 64
+    @assert movestruct.king[1] == UInt64(770)
 end
-test_moves()
+test_moveBB()
 
 println("All tests passed")

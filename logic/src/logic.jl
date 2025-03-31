@@ -1,6 +1,6 @@
 module logic
 
-export GUIposition, setone, setzero, Boardstate, white_pieces, black_pieces, Moves
+export GUIposition, setone, setzero, Boardstate, white_pieces, black_pieces, Move_BB
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
@@ -164,13 +164,21 @@ function get_moves(piece_name)
     return moves
 end
 
-struct Moves
+struct Move_BB
+    king::Vector{UInt64}
     knight::Vector{UInt64}
 end
 
-function Moves()
-    knight_moves = get_moves("knight")
-    return Moves(knight_moves)
+function Move_BB()
+    king_mvs = get_moves("king")
+    knight_mvs = get_moves("knight")
+    return Move_BB(king_mvs,knight_mvs)
+end
+
+struct Move
+    from::UInt32
+    to::UInt32
+    iscapture::Bool
 end
 
 function GUIposition(board::Boardstate)

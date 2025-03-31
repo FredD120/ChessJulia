@@ -143,6 +143,8 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN)
                     mouse_pos = board_coords(xpos,ypos,square_width)
                     if position[mouse_pos] > 0 #need to check if piece can make legal moves
                         click_pos = mouse_pos
+                    else
+                        click_pos = 0
                     end
                     #position = get_position()
                 end
@@ -172,7 +174,9 @@ end
 function main()
     
     #SDL_Quit()
-    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    #test knights and kings
+    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
     WIDTH = 800
     win, renderer = startup(WIDTH,WIDTH)
     pieces = load_pieces(renderer)
