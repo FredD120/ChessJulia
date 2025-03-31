@@ -1,0 +1,4 @@
+[deps]
+SimpleDirectMediaLayer = "98e33af6-2ee5-5afd-9e75-cbc738b767c4"
+libpng_jll = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
+logic = "71af330d-9551-40af-bd9f-dd36b4d12b46"
