@@ -1,7 +1,5 @@
 module logic
 
-using BenchmarkTools
-
 export GUIposition, setone, setzero, Boardstate, white_pieces, black_pieces, Moves
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
@@ -157,17 +155,21 @@ function with_pieces(f,board,args...)
     end
 end
 
+function get_moves(piece_name)
+    moves = Vector{UInt64}(undef,64)
+    movelist = readlines("$(pwd())/logic/move_BBs/$(piece_name).txt")
+    for (i,m) in enumerate(movelist)
+        moves[i] = parse(UInt64,m)
+    end   
+    return moves
+end
 
 struct Moves
     knight::Vector{UInt64}
 end
 
 function Moves()
-    knight_moves = Vector{UInt64}(undef,64)
-    movelist = readlines("$(pwd())/logic/move_BBs/knight.txt")
-    for (i,m) in enumerate(movelist)
-        knight_moves[i] = parse(UInt64,m)
-    end   
+    knight_moves = get_moves("knight")
     return Moves(knight_moves)
 end
 
