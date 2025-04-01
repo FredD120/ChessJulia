@@ -120,7 +120,6 @@ function render_pieces(renderer,piece_width,position,tex_vec)
     end
 end
 
-
 function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN)
     square_width = Int(WIDTH/8)
     logicstate = logic.Boardstate(FEN)
@@ -176,7 +175,8 @@ function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #test knights and kings
-    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    FEN="8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
     WIDTH = 800
     win, renderer = startup(WIDTH,WIDTH)
     pieces = load_pieces(renderer)
