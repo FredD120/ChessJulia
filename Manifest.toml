@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.4"
 manifest_format = "2.0"
 project_hash = "f4710d194cf17dfc9a7e077d3ebfaf8f08f2a3bc"
 
@@ -762,7 +762,7 @@ version = "1.4.0+0"
 
 [[deps.logic]]
 deps = ["BenchmarkTools"]
-path = "C:\\Users\\fwdan\\JuliaProjects\\ChessJulia\\logic"
+path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\logic"
 uuid = "71af330d-9551-40af-bd9f-dd36b4d12b46"
 version = "0.0.7"
 
