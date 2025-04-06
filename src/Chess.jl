@@ -120,11 +120,25 @@ function render_pieces(renderer,piece_width,position,tex_vec)
     end
 end
 
-function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN)
+function mouse_clicked(mouse_pos,all_moves,DEBUG)
+    if DEBUG
+        piecemoves = all_moves.knight[mouse_pos]
+        return identify_locations(piecemoves)
+    else
+        if position[mouse_pos] > 0 
+            return [mouse_pos]
+        else
+            return []
+        end
+    end
+end
+
+function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
     square_width = Int(WIDTH/8)
     logicstate = logic.Boardstate(FEN)
-    position = logic.GUIposition(logicstate)
-    click_pos = 0
+    position = logic.GUIposition(logicstate)#
+    all_moves = Move_BB()
+    click_pos = []
     try
         close = false
         while !close
@@ -140,11 +154,8 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN)
                     xpos = getproperty(mouse_evt,:x)
                     ypos = getproperty(mouse_evt,:y)
                     mouse_pos = board_coords(xpos,ypos,square_width)
-                    if position[mouse_pos] > 0 #need to check if piece can make legal moves
-                        click_pos = mouse_pos
-                    else
-                        click_pos = 0
-                    end
+
+                    click_pos = mouse_clicked(mouse_pos,all_moves,DEBUG)
                     #position = get_position()
                 end
             end
@@ -152,9 +163,11 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN)
             SDL_RenderClear(renderer)
             SDL_RenderCopy(renderer, board, C_NULL, Ref(SDL_Rect(0,0,WIDTH,WIDTH)))
 
-            if click_pos!=0
-                x,y = pixel_coords(click_pos,square_width)
-                SDL_RenderCopy(renderer,click_sq,C_NULL,Ref(SDL_Rect(x,y,square_width,square_width)))
+            if length(click_pos) > 0
+                for pos in click_pos
+                    x,y = pixel_coords(pos,square_width)
+                    SDL_RenderCopy(renderer,click_sq,C_NULL,Ref(SDL_Rect(x,y,square_width,square_width)))
+                end
             end
 
             render_pieces(renderer,square_width,position,tex_vec)
@@ -182,7 +195,7 @@ function main()
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,WIDTH,renderer,WIDTH)
     click_sq = colour_surface(const_colour,[205, 253, 158, 255],renderer,Int(WIDTH/8))
-    main_loop(win,renderer,pieces,board,click_sq,WIDTH,FEN)
+    main_loop(win,renderer,pieces,board,click_sq,WIDTH,FEN,true)
 
 end
 main()
