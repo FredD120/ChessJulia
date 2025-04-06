@@ -1,6 +1,7 @@
 using logic
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+const all_moves = Move_BB()
 
 function test_setters()
     num = UInt64(1)
@@ -17,10 +18,11 @@ function test_boardinit()
     board = Boardstate(FEN)
     @assert board.Whitesmove == true
     @assert board.EnPassant == UInt64(0)
-    @assert board.WPawn != UInt64(0)
-    @assert board.BPawn != UInt64(0)
-    @assert board.BKing == UInt64(1) << 4
-    @assert board.WKing == UInt64(1) << 60
+    @assert board.ally_pieces[3] != UInt64(0)
+    @assert board.enemy_pieces[3] != UInt64(0)
+    @assert board.enemy_pieces[1] == UInt64(1) << 4
+    @assert board.ally_pieces[1] == UInt64(1) << 60
+    @assert board.Halfmoves == 0
 end
 test_boardinit()
 
@@ -33,10 +35,10 @@ function test_GUIboard()
 end
 test_GUIboard()
 
-function test_colour_pieces()
+function test_player_pieces()
     board = Boardstate(FEN)
-    white = white_pieces(board)
-    black = black_pieces(board)
+    white = player_pieces(board.ally_pieces)
+    black = player_pieces(board.enemy_pieces)
     all = all_pieces(board)
     compareW = UInt64(0)
     compareB = UInt64(0)
@@ -49,7 +51,7 @@ function test_colour_pieces()
     @assert black == compareB
     @assert all == compareW | compareB
 end
-test_colour_pieces()
+test_player_pieces()
 
 function test_moveBB()
     movestruct = Move_BB()
@@ -63,10 +65,10 @@ function test_iterators()
     pieces = piece_iterator(board)
     @assert length(pieces) == 12
     @assert typeof(pieces) == typeof(Vector{UInt64}())
-    wpieces = white_iterator(board)
+    wpieces = board.ally_pieces
     @assert length(wpieces) == 6
     @assert typeof(wpieces) == typeof(Vector{UInt64}())
-    bpieces = black_iterator(board)
+    bpieces = board.enemy_pieces
     @assert length(bpieces) == 6
     @assert typeof(bpieces) == typeof(Vector{UInt64}())
 end
@@ -86,21 +88,25 @@ function test_identifylocs()
 end
 test_identifylocs()
 
-function test_currplayerinfo()
-    board = Boardstate(FEN)
-    iter, enemy, all = current_player_info(board)
-
-    @assert length(iter) == 6
-    @assert length(identify_locations(enemy)) == 16
-    @assert length(identify_locations(all)) == 32
+function test_movfromloc()
+    moves = moves_from_location(UInt64(3),2,false)
+    @assert length(moves) == 2
+    @assert moves[1].iscapture == false
+    @assert moves[2].from == 2
 end
-test_currplayerinfo()
+test_movfromloc()
+
+function test_kingmoves()
+    moves = get_kingmoves(UInt8(0),all_moves,UInt64(0),UInt64(0))
+    @assert length(moves) == 3
+
+end
+test_kingmoves()
 
 function test_movegetters()
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    all_move_BBs = Move_BB()
-    moves = generate_moves(board,all_move_BBs)
+    moves = generate_moves(board,all_moves)
 
     attks = 0
     quiets = 0
@@ -115,5 +121,24 @@ function test_movegetters()
     @assert quiets == 7
 end
 test_movegetters()
+
+function test_makemove()
+    basicFEN = "K7/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    moves = generate_moves(board,all_moves)
+
+    @assert board.ally_pieces[1] == UInt64(1)
+
+    for m in moves
+        if m.to == 1
+            make_move!(m,board,1)
+        end
+    end
+
+    @assert board.Whitesmove == false
+    @assert board.Halfmoves == UInt32(1)
+    @assert board.enemy_pieces[1] == UInt64(2)
+end
+test_makemove()
 
 println("All tests passed")
