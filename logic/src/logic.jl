@@ -17,7 +17,7 @@ mutable struct Boardstate
     Whitesmove::Bool
 end
 
-#Initialise a boardstate from a FEN string
+"Initialise a boardstate from a FEN string"
 function Boardstate(FEN)
     WKing = UInt64(0)
     WQueen = UInt64(0)
@@ -137,9 +137,9 @@ end
 
 all_pieces(b::Boardstate) = player_pieces(vcat(b.ally_pieces,b.enemy_pieces))
 
-piece_iterator(b::Boardstate) = vcat(b.ally_pieces,b.enemy_pieces)
+piece_iterator(b::Boardstate) = b.Whitesmove ? vcat(b.ally_pieces,b.enemy_pieces) : vcat(b.enemy_pieces,b.ally_pieces)
 
-#tells GUI where pieces are on the board
+"tells GUI where pieces are on the board"
 function GUIposition(board::Boardstate)
     position = zeros(UInt8,64)
     for (pieceID,piece) in enumerate(piece_iterator(board))
@@ -152,10 +152,10 @@ function GUIposition(board::Boardstate)
     return position
 end
 
-#take in all possible moves for a given piece from a txt file
+"take in all possible moves for a given piece from a txt file"
 function read_moves(piece_name)
     moves = Vector{UInt64}(undef,64)
-    movelist = readlines("$(pwd())/logic/move_BBs/$(piece_name).txt")
+    movelist = readlines("$(dirname(@__DIR__))/move_BBs/$(piece_name).txt")
     for (i,m) in enumerate(movelist)
         moves[i] = parse(UInt64,m)
     end   
@@ -167,7 +167,7 @@ struct Move_BB
     knight::Vector{UInt64}
 end
 
-#constructor for Move_BB that reads all moves from txt files
+"constructor for Move_BB that reads all moves from txt files"
 function Move_BB()
     king_mvs = read_moves("king")
     knight_mvs = read_moves("knight")
@@ -180,7 +180,7 @@ struct Move
     iscapture::Bool
 end
 
-#returns a number between 0 and 63 to indicate where we are on a chessboard
+"returns a number between 0 and 63 to indicate where we are on a chessboard"
 function identify_locations(pieceBB::UInt64)::Vector{UInt8}
     locations = Vector{UInt8}()
     for i in UInt8(0):UInt8(63)
@@ -191,7 +191,7 @@ function identify_locations(pieceBB::UInt64)::Vector{UInt8}
     return locations
 end
 
-#creates a move from a given location using the Move struct, with flag for attacks
+"creates a move from a given location using the Move struct, with flag for attacks"
 function moves_from_location(destinations::UInt64,origin::Integer,attackflag::Bool)::Vector{Move}
     locs = identify_locations(destinations)
     moves = Vector{Move}(undef, length(locs))
@@ -201,7 +201,7 @@ function moves_from_location(destinations::UInt64,origin::Integer,attackflag::Bo
     return moves
 end
 
-#returns attacks and quiet moves by the king
+"returns attacks and quiet moves by the king"
 function get_kingmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
     poss_moves = moveset.king[location+1]
     attacks = poss_moves & enemy_pcs
@@ -209,7 +209,7 @@ function get_kingmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_pc
     return [moves_from_location(attacks,location,true);moves_from_location(quiets,location,false)]
 end
 
-#returns attacks and quiet moves by a knight
+"returns attacks and quiet moves by a knight"
 function get_knightmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
     poss_moves = moveset.knight[location+1]
     attacks = poss_moves & enemy_pcs
@@ -217,7 +217,7 @@ function get_knightmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_
     return [moves_from_location(attacks,location,true);moves_from_location(quiets,location,false)]
 end
 
-#uses integer ID to determine type of piece (returns a function)
+"uses integer ID to determine type of piece (returns a function)"
 function determine_piece(pieceID::Integer)
     if pieceID == 1
         return get_kingmoves
@@ -226,7 +226,7 @@ function determine_piece(pieceID::Integer)
     end
 end
 
-#get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves
+"get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate,moveset::Move_BB)::Vector{Move}
     enemy_pcs = player_pieces(board.enemy_pieces)
     all_pcs = all_pieces(board)
@@ -247,15 +247,15 @@ function generate_moves(board::Boardstate,moveset::Move_BB)::Vector{Move}
     return movelist
 end
 
-#modify boardstate by making a move
+"modify boardstate by making a move"
 function make_move!(move::Move,board::Boardstate,piecetype::Integer)
     #need to swap ally and enemy as well as deleting and replacing pieces
     enemy_copy = copy(board.enemy_pieces)
     for (i,ally) in enumerate(board.ally_pieces)
-        board.enemy_pieces[i] = setzero(ally,move.from)
         if i == piecetype
-            board.enemy_pieces[i] = setone(ally,move.to)
+            ally = setone(ally,move.to)
         end
+        board.enemy_pieces[i] = setzero(ally,move.from)
     end
 
     for (i,enemy) in enumerate(enemy_copy)

@@ -3,7 +3,7 @@ using SimpleDirectMediaLayer.LibSDL2
 using logic
 #using libpng_jll
 
-#initialise window and renderer in SDL
+"initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 16)
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 16)
@@ -17,7 +17,7 @@ function startup(WIDTH=1000,HEIGHT=1000)
     return win,renderer
 end
 
-#Create texture from surface and delete surface
+"create texture from surface and delete surface"
 function texture!(surface,renderer)
     tex = SDL_CreateTextureFromSurface(renderer, surface)
     if tex == C_NULL
@@ -28,7 +28,7 @@ function texture!(surface,renderer)
     return tex
 end
 
-#retrieve texture from file
+"retrieve texture from file"
 function get_texture(renderer,path,name)
     surface = IMG_Load("$(path)$(name).png")
     @assert surface != C_NULL "Error loading image: $(unsafe_string(SDL_GetError()))"
@@ -36,7 +36,7 @@ function get_texture(renderer,path,name)
     return texture!(surface,renderer)
 end
 
-#loads chess pieces from file and creates vector of pointers to textures
+"loads chess pieces from file and creates vector of pointers to textures"
 function load_pieces(renderer)
     
     filepath = "$(pwd())/ChessPieces/"
@@ -58,10 +58,10 @@ function load_pieces(renderer)
     return texture_vec
 end
 
-#return flat colour
+"return flat colour"
 const_colour(x,y,c) = SDL_Color(c[1], c[2], c[3], c[4])
 
-#return colours of chessboard
+"return colours of chessboard"
 function chessboard(x,y,width)
     square_size = width ÷ 8  # Integer division
     brown = SDL_Color(125, 62, 62, 255)  # Brown
@@ -75,7 +75,7 @@ function chessboard(x,y,width)
     end
 end
 
-#create and apply colour to surface
+"create and apply colour to surface"
 function colour_surface(f,args,renderer,width,height=width)
     # Create surface (32-bit RGBA format)
     surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32)
@@ -101,21 +101,21 @@ function colour_surface(f,args,renderer,width,height=width)
     return texture!(surface,renderer)
 end
    
-#take in square pos from 0 to 63 and translate to pixel position of centre of square
+"take in square pos from 0 to 63 and translate to pixel position of centre of square"
 function pixel_coords(i,sq_width)
     xpos = (i) % 8
     ypos = (i - xpos) / 8
     return xpos*sq_width, ypos*sq_width
 end
 
-#take in pixel coordinates and return which chess square it is on (0-indexed)
+"take in pixel coordinates and return which chess square it is on (0-indexed)"
 function board_coords(xpos,ypos,sq_width)
     x = Int((xpos - (xpos % sq_width))/sq_width)
     y = Int((ypos - (ypos % sq_width))/sq_width)
     return x + y*8
 end
 
-#Takes in a position and places pieces based on ptrs to piece textures
+"Takes in a position and places pieces based on ptrs to piece textures"
 function render_pieces(renderer,piece_width,position,tex_vec)
     for (i,p) in enumerate(position)
         if p!=0
@@ -126,7 +126,7 @@ function render_pieces(renderer,piece_width,position,tex_vec)
     end
 end
 
-#update gui based on mouse click
+"update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
     if DEBUG
         piecemoves = all_moves.king[mouse_pos+1]
@@ -143,16 +143,17 @@ function mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
     end
 end
 
-#update logic with move made, return new GUI position
-function move_clicked!(click_pos,legal_moves,GUIpositions,logicstate)
+"update logic with move made"
+function move_clicked!(mouse_pos,legal_moves,GUIpositions,logicstate)
     for move in legal_moves
-        if move.from == click_pos
-            piece_hint = GUIpositions[click_pos+1]
+        if move.to == mouse_pos
+            piece_hint = GUIpositions[mouse_pos+1]
             logic.make_move!(move,logicstate,piece_hint)
         end
     end
 end
 
+"display pieces and chessboard on screen. enable clicking to show and make legal moves"
 function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
     square_width = Int(WIDTH/8)
     logicstate = logic.Boardstate(FEN)
@@ -176,11 +177,14 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
                     ypos = getproperty(mouse_evt,:y)
                     mouse_pos = board_coords(xpos,ypos,square_width)
 
-                    if length(click_pos) > 0
+                    if length(click_pos) > 0 & !DEBUG
                         if mouse_pos in click_pos
-                            move_clicked!(click_pos,legal_moves,position,logicstate)
+                            #make move in logic then update GUI to reflect new board
+                            move_clicked!(mouse_pos,legal_moves,position,logicstate)
+                            println(logicstate.ally_pieces)
                             position = GUIposition(logicstate)
                         end
+                        #rest square clicked on to nothing
                         click_pos = []
                     else
                         click_pos = mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
@@ -217,13 +221,14 @@ function main()
     #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #test knights and kings
     #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
-    FEN="8/8/4nK2/8/8/8/8/8 b KQkq - 0 1"
+    #FEN="8/8/4nK2/8/8/8/8/8 b KQkq - 0 1"
+    FEN="Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
     WIDTH = 800
     win, renderer = startup(WIDTH,WIDTH)
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,WIDTH,renderer,WIDTH)
     click_sq = colour_surface(const_colour,[205, 253, 158, 255],renderer,Int(WIDTH/8))
-    main_loop(win,renderer,pieces,board,click_sq,WIDTH,FEN,true)
+    main_loop(win,renderer,pieces,board,click_sq,WIDTH,FEN)
 
 end
 main()

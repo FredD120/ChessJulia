@@ -1,12 +1,12 @@
-#converts a single board sqaure to a bitboard
+"converts a single board sqaure to a bitboard"
 function to_UInt64(val)
     return UInt64(1) << val
 end
 
-#convert chessboard x y to 1D array
+"convert chessboard x y to 1D array"
 board_coords(x) =  x[1]*8 + x[2]
 
-#Returns true if inbounds. For chessboards, limit=1, upper=7, lower=0
+"Returns true if inbounds. For chessboards, limit=1, upper=7, lower=0"
 function in_grid(val,upper,lower,limit=0)
     for (v,u,l) in zip(val,upper,lower)
         if !(v+limit > l && v-limit < u)
@@ -16,7 +16,7 @@ function in_grid(val,upper,lower,limit=0)
     return true
 end
 
-#save move data to file
+"save move data to file"
 function save_data(data,filename)
     if isfile(filename)
         println("error creating $(filename): file already exists")
@@ -29,7 +29,7 @@ function save_data(data,filename)
     end
 end
 
-#scan through chess squares, generating moves of a particular piece on that square
+"scan through chess squares, generating moves of a particular piece on that square"
 function create_moves(f)
     chesspos = 0:7
     movelist = []
@@ -42,7 +42,7 @@ function create_moves(f)
     return movelist
 end
 
-#generate moves of a king at x,y
+"generate moves of a king at x,y"
 function king(x,y)
     dirs = [-1,0,1]
     move_pos = UInt64(0)
@@ -59,7 +59,7 @@ function king(x,y)
     return move_pos
 end
 
-#take generated moves and send them to be saved to a file
+"take generated moves and send them to be saved to a file"
 function save_moves(f,filename)
     moves = create_moves(f)
     save_data(moves,"$(pwd())/logic/move_BBs/$(filename).txt")
