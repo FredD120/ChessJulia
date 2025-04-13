@@ -181,6 +181,7 @@ function Move_BB()
 end
 
 struct Move
+    piece_type::UInt8
     from::UInt32
     to::UInt32
     iscapture::Bool
@@ -198,11 +199,11 @@ function identify_locations(pieceBB::UInt64)::Vector{UInt8}
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
-function moves_from_location(destinations::UInt64,origin::Integer,attackflag::Bool)::Vector{Move}
+function moves_from_location(type::UInt8,destinations::UInt64,origin::Integer,attackflag::Bool)::Vector{Move}
     locs = identify_locations(destinations)
     moves = Vector{Move}(undef, length(locs))
     for (i,loc) in enumerate(locs)
-        moves[i] = Move(origin,loc,attackflag)
+        moves[i] = Move(type,origin,loc,attackflag)
     end
     return moves
 end
@@ -212,7 +213,7 @@ function get_kingmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_pc
     poss_moves = moveset.king[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(attacks,location,true);moves_from_location(quiets,location,false)]
+    return [moves_from_location(UInt8(1),attacks,location,true);moves_from_location(UInt8(1),quiets,location,false)]
 end
 
 "returns attacks and quiet moves by a knight"
@@ -220,7 +221,7 @@ function get_knightmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_
     poss_moves = moveset.knight[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(attacks,location,true);moves_from_location(quiets,location,false)]
+    return [moves_from_location(UInt8(5),attacks,location,true);moves_from_location(UInt8(5),quiets,location,false)]
 end
 
 "uses integer ID to determine type of piece (returns a function)"
@@ -254,12 +255,12 @@ function generate_moves(board::Boardstate,moveset::Move_BB)::Vector{Move}
 end
 
 "modify boardstate by making a move"
-function make_move!(move::Move,board::Boardstate,piecetype::Integer)
+function make_move!(move::Move,board::Boardstate)
     #need to swap ally and enemy as well as deleting and replacing pieces
     enemy_copy = copy(board.enemy_pieces)
 
     for (i,ally) in enumerate(board.ally_pieces)
-        if i == piecetype
+        if i == move.piece_type
             ally = setone(ally,move.to)
         end
         board.enemy_pieces[i] = setzero(ally,move.from)

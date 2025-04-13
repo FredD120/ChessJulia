@@ -94,10 +94,11 @@ end
 test_identifylocs()
 
 function test_movfromloc()
-    moves = moves_from_location(UInt64(3),2,false)
+    moves = moves_from_location(UInt8(1),UInt64(3),2,false)
     @assert length(moves) == 2
     @assert moves[1].iscapture == false
     @assert moves[2].from == 2
+    @assert moves[1].piece_type == 1
 end
 test_movfromloc()
 
@@ -137,7 +138,7 @@ function test_makemove()
 
     for m in moves
         if m.to == 1
-            make_move!(m,board,1)
+            make_move!(m,board)
         end
     end
 
@@ -152,7 +153,7 @@ function test_makemove()
 
     for m in moves
         if m.to == 8
-            make_move!(m,board,1)
+            make_move!(m,board)
         end
     end
     @assert sum(board.ally_pieces)  == UInt64(1) << 1
@@ -168,25 +169,26 @@ function test_makemove()
 
     for m in moves
         if m.to == 11
-            make_move!(m,board,5)
+            make_move!(m,board)
         end
     end
     @assert sum(board.enemy_pieces) == UInt64(1) << 11
     GUI = GUIposition(board)
     @assert GUI[12] == 11
 
-    #Test many pieces on the board
-    basicFEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    #Test 3 pieces on the board
+    basicFEN = "8/8/8/8/8/8/8/NNN5 w KQkq - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board,all_moves)
-    @assert length(moves) == 25
+    @assert length(moves) == 9
     
     for m in moves
         if (m.from == 56) & (m.to == 41)
-            make_move!(m,board,5)
+            make_move!(m,board)
         end
     end
     @assert board.Whitesmove == false
+    @assert sum(board.ally_pieces) == 0
 
     GUI = GUIposition(board)
     @assert GUI[42] == 5
@@ -203,7 +205,7 @@ function test_capture()
 
     for m in moves
         if m.iscapture 
-            make_move!(m,board,1)
+            make_move!(m,board)
         end
     end
 

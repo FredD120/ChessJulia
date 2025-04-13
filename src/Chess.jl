@@ -154,14 +154,10 @@ function mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
 end
 
 "update logic with move made"
-function move_clicked!(mouse_pos,legal_moves,GUIpositions,logicstate)
+function move_clicked!(move_from,mouse_pos,legal_moves,logicstate)
     for move in legal_moves
-        if move.to == mouse_pos
-            piece_hint = GUIpositions[move.from+1]
-            if !logicstate.Whitesmove
-                piece_hint -= 6
-            end
-            logic.make_move!(move,logicstate,piece_hint)
+        if (move.to == mouse_pos) & (move.from == move_from)
+            make_move!(move,logicstate)
         end
     end
 end
@@ -172,7 +168,8 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
     position = logic.GUIposition(logicstate)
     all_moves = logic.Move_BB()
     legal_moves = logic.generate_moves(logicstate,all_moves)
-    click_pos = []
+    highlight_moves = []    #visualise legal moves for selected piece
+    sq_clicked = -1         #position of mouse click in board coords
     try
         close = false
         while !close
@@ -189,19 +186,21 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                     ypos = getproperty(mouse_evt,:y)
                     mouse_pos = board_coords(xpos,ypos,square_width)
 
-                    if (length(click_pos) > 0) & !DEBUG
-                        if mouse_pos in click_pos
+                    if (length(highlight_moves) > 0) & !DEBUG
+                        if mouse_pos in highlight_moves
                             #make move in logic then update GUI to reflect new board
-                            move_clicked!(mouse_pos,legal_moves,position,logicstate)
+                            move_clicked!(sq_clicked,mouse_pos,legal_moves,logicstate)
                             #update positions of pieces in GUI representation
                             position = GUIposition(logicstate)
                             #generate new set of moves
-                            legal_moves = logic.generate_moves(logicstate,all_moves)
+                            legal_moves = generate_moves(logicstate,all_moves)
                         end
-                        #rest square clicked on to nothing
-                        click_pos = []
+                        #reset square clicked on to nothing
+                        highlight_moves = []
+                        sq_clicked = -1
                     else
-                        click_pos = mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
+                        highlight_moves = mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
+                        sq_clicked = mouse_pos
                     end
                 end
             end
@@ -209,8 +208,8 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
             SDL_RenderClear(renderer)
             SDL_RenderCopy(renderer, board, C_NULL, Ref(SDL_Rect(0,0,WIDTH,WIDTH)))
 
-            if length(click_pos) > 0
-                for pos in click_pos
+            if length(highlight_moves) > 0
+                for pos in highlight_moves
                     x,y = pixel_coords(pos,square_width)
                     click_sq = click_sqs[2]
                     if is_dark_sq(x+1,y+1,square_width)
