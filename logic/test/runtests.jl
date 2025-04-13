@@ -11,6 +11,11 @@ function test_setters()
 
     num = setzero(num,0)
     @assert num == UInt64(2)
+    num = setzero(num,1)
+    @assert num == UInt64(0)
+
+    num2 = UInt64(2)
+    @assert setzero(num2,8) == UInt64(2)
 end
 test_setters()
 
@@ -123,6 +128,7 @@ end
 test_movegetters()
 
 function test_makemove()
+    #Test making a move with only one piece on the board
     basicFEN = "K7/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board,all_moves)
@@ -138,10 +144,57 @@ function test_makemove()
     @assert board.Whitesmove == false
     @assert board.Halfmoves == UInt32(1)
     @assert board.enemy_pieces[1] == UInt64(2)
+
+    #Test making a non-capture with two pieces on the board
+    basicFEN = "Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    moves = generate_moves(board,all_moves)
+
+    for m in moves
+        if m.to == 8
+            make_move!(m,board,1)
+        end
+    end
+    @assert sum(board.ally_pieces)  == UInt64(1) << 1
+    @assert board.enemy_pieces[1] == UInt64(1) << 8
+    @assert length(generate_moves(board,all_moves)) == 3
+
+    #Test a black move
+    basicFEN = "1n6/K7/8/8/8/8/8/8 b KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    moves = generate_moves(board,all_moves)
+    @assert board.Whitesmove == false
+    @assert length(moves) == 3
+
+    for m in moves
+        if m.to == 11
+            make_move!(m,board,5)
+        end
+    end
+    @assert sum(board.enemy_pieces) == UInt64(1) << 11
+    GUI = GUIposition(board)
+    @assert GUI[12] == 11
+
+    #Test many pieces on the board
+    basicFEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    moves = generate_moves(board,all_moves)
+    @assert length(moves) == 25
+    
+    for m in moves
+        if (m.from == 56) & (m.to == 41)
+            make_move!(m,board,5)
+        end
+    end
+    @assert board.Whitesmove == false
+
+    GUI = GUIposition(board)
+    @assert GUI[42] == 5
 end
 test_makemove()
 
 function test_capture()
+    #WKing captures BKnight
     basicFEN = "Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board,all_moves)
@@ -156,6 +209,8 @@ function test_capture()
 
     @assert sum(board.ally_pieces) == 0
     @assert board.enemy_pieces[1] == UInt64(2)
+
+    @assert length(generate_moves(board,all_moves)) == 0
 
     GUI = GUIposition(board)
     @assert GUI[2] == 1

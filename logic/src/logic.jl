@@ -6,7 +6,7 @@ determine_piece, identify_locations, moves_from_location, generate_moves, Move
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
-setzero(num::UInt64,index::Integer) = num = num & (~UInt64(1) << index)
+setzero(num::UInt64,index::Integer) = num & ~(UInt64(1) << index)
 
 mutable struct Boardstate
     ally_pieces::Vector{UInt64}
@@ -122,9 +122,15 @@ function Boardstate(FEN)
         end
     end
 
-    Boardstate([WKing,WQueen,WPawn,WBishop,WKnight,WRook],
-    [BKing,BQueen,BPawn,BBishop,BKnight,BRook],
-    Castling,EnPassant,Halfmoves,Whitesmove)
+    if Whitesmove
+        Boardstate([WKing,WQueen,WPawn,WBishop,WKnight,WRook],
+        [BKing,BQueen,BPawn,BBishop,BKnight,BRook],
+        Castling,EnPassant,Halfmoves,Whitesmove)
+    else
+        Boardstate([BKing,BQueen,BPawn,BBishop,BKnight,BRook],
+        [WKing,WQueen,WPawn,WBishop,WKnight,WRook],
+        Castling,EnPassant,Halfmoves,Whitesmove)
+    end
 end
 
 function player_pieces(piece_vec::Vector{UInt64})
@@ -251,6 +257,7 @@ end
 function make_move!(move::Move,board::Boardstate,piecetype::Integer)
     #need to swap ally and enemy as well as deleting and replacing pieces
     enemy_copy = copy(board.enemy_pieces)
+
     for (i,ally) in enumerate(board.ally_pieces)
         if i == piecetype
             ally = setone(ally,move.to)

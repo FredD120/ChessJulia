@@ -58,17 +58,19 @@ function load_pieces(renderer)
     return texture_vec
 end
 
+"takes in position in pixel coords returns true if square is dark colour"
+is_dark_sq(x,y,sq_width) = ((x-1) ÷ sq_width + (y-1) ÷ sq_width) % 2 == 0
+
 "return flat colour"
 const_colour(x,y,c) = SDL_Color(c[1], c[2], c[3], c[4])
 
-"return colours of chessboard"
-function chessboard(x,y,width)
-    square_size = width ÷ 8  # Integer division
-    brown = SDL_Color(125, 62, 62, 255)  # Brown
-    cream = SDL_Color(255, 253, 208, 255)  # Cream
+"takes in position in pixel coords return colours in chessboard pattern"
+function chessboard(x,y,sq_width,brn,crm)
+    brown = SDL_Color(brn[1], brn[2], brn[3], brn[4])  # Brown
+    cream = SDL_Color(crm[1], crm[2], crm[3], crm[4])  # Cream
 
     # Checkerboard pattern
-    if ((x - 1) ÷ square_size + (y - 1) ÷ square_size) % 2 == 0
+    if is_dark_sq(x,y,sq_width)
         return brown
     else
         return cream
@@ -76,9 +78,9 @@ function chessboard(x,y,width)
 end
 
 "create and apply colour to surface"
-function colour_surface(f,args,renderer,width,height=width)
+function colour_surface(f,renderer,width,args...)
     # Create surface (32-bit RGBA format)
-    surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_RGBA32)
+    surface = SDL_CreateRGBSurfaceWithFormat(0, width, width, 32, SDL_PIXELFORMAT_RGBA32)
     if surface == C_NULL
         error("Failed to create surface")
     end
@@ -86,19 +88,28 @@ function colour_surface(f,args,renderer,width,height=width)
     SDL_LockSurface(surface) != 0 && error("Failed to lock surface")
 
     # Get pixel data as a Ptr{UInt32} (since format is RGBA32)
-    pixels = unsafe_wrap(Array, convert(Ptr{UInt32}, unsafe_load(surface).pixels), (width, height))
+    pixels = unsafe_wrap(Array, convert(Ptr{UInt32}, unsafe_load(surface).pixels), (width, width))
 
     srf_fmt = unsafe_load(surface).format
 
     for y in 1:width
         for x in 1:width
-            colour = f(x,y,args)
+            colour = f(x,y,args...)
             pixels[y, x] = SDL_MapRGBA(srf_fmt, colour.r, colour.g, colour.b, colour.a) 
         end
     end
 
     SDL_UnlockSurface(surface)
     return texture!(surface,renderer)
+end
+
+"return different coloured squares to indicate legal move for brown and cream colours"
+function click_sqs(renderer,sq_width,brown,cream)
+    blue = [-20, -20, 30, 0] 
+
+    bclk_sq = colour_surface(const_colour,renderer,sq_width,brown.+blue)
+    cclk_sq = colour_surface(const_colour,renderer,sq_width,cream.+blue)
+    return bclk_sq,cclk_sq
 end
    
 "take in square pos from 0 to 63 and translate to pixel position of centre of square"
@@ -134,7 +145,6 @@ function mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
     else
         highlight = []
         for move in legal_moves
-            #println("mouse:$mouse_pos, move:$(move.from)")
             if move.from == mouse_pos
                 push!(highlight,move.to)
             end
@@ -147,15 +157,17 @@ end
 function move_clicked!(mouse_pos,legal_moves,GUIpositions,logicstate)
     for move in legal_moves
         if move.to == mouse_pos
-            piece_hint = GUIpositions[mouse_pos+1]
+            piece_hint = GUIpositions[move.from+1]
+            if !logicstate.Whitesmove
+                piece_hint -= 6
+            end
             logic.make_move!(move,logicstate,piece_hint)
         end
     end
 end
 
 "display pieces and chessboard on screen. enable clicking to show and make legal moves"
-function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
-    square_width = Int(WIDTH/8)
+function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,DEBUG=false)
     logicstate = logic.Boardstate(FEN)
     position = logic.GUIposition(logicstate)
     all_moves = logic.Move_BB()
@@ -177,12 +189,14 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
                     ypos = getproperty(mouse_evt,:y)
                     mouse_pos = board_coords(xpos,ypos,square_width)
 
-                    if length(click_pos) > 0 & !DEBUG
+                    if (length(click_pos) > 0) & !DEBUG
                         if mouse_pos in click_pos
                             #make move in logic then update GUI to reflect new board
                             move_clicked!(mouse_pos,legal_moves,position,logicstate)
-                            println(logicstate.ally_pieces)
+                            #update positions of pieces in GUI representation
                             position = GUIposition(logicstate)
+                            #generate new set of moves
+                            legal_moves = logic.generate_moves(logicstate,all_moves)
                         end
                         #rest square clicked on to nothing
                         click_pos = []
@@ -198,6 +212,10 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
             if length(click_pos) > 0
                 for pos in click_pos
                     x,y = pixel_coords(pos,square_width)
+                    click_sq = click_sqs[2]
+                    if is_dark_sq(x+1,y+1,square_width)
+                        click_sq = click_sqs[1]
+                    end
                     SDL_RenderCopy(renderer,click_sq,C_NULL,Ref(SDL_Rect(x,y,square_width,square_width)))
                 end
             end
@@ -216,19 +234,20 @@ function main_loop(win,renderer,tex_vec,board,click_sq,WIDTH,FEN,DEBUG=false)
 end
 
 function main()
-    
     #SDL_Quit()
     #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #test knights and kings
-    #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
-    #FEN="8/8/4nK2/8/8/8/8/8 b KQkq - 0 1"
-    FEN="Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
+    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+
     WIDTH = 800
+    sq_width = Int(WIDTH÷8)
+    brown = [125, 62, 62, 255] 
+    cream = [255, 253, 208, 255] 
     win, renderer = startup(WIDTH,WIDTH)
     pieces = load_pieces(renderer)
-    board = colour_surface(chessboard,WIDTH,renderer,WIDTH)
-    click_sq = colour_surface(const_colour,[205, 253, 158, 255],renderer,Int(WIDTH/8))
-    main_loop(win,renderer,pieces,board,click_sq,WIDTH,FEN)
+    board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
+    bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
+    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN)
 
 end
 main()
