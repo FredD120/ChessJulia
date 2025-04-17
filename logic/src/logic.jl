@@ -26,9 +26,7 @@ function Move_BB()
     return Move_BB(king_mvs,knight_mvs)
 end
 
-if !isdefined(@__MODULE__, :moveset) #REPL hack
-    const moveset = Move_BB()
-end
+const moveset = Move_BB()
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
@@ -202,8 +200,8 @@ function identify_locations(pieceBB::UInt64)::Vector{UInt8}
     return locations
 end
 
-"checks enemy pieces to see if any are attacking the current square"
-function is_attackable(board::Boardstate,position::Integer)::Bool
+"checks enemy pieces to see if any are attacking the current square, returns BB of attackers"
+function attackable(board::Boardstate,position::Integer)::UInt64
     attacks = UInt64(0)
 
     kingmoves = moveset.king[position+1]
@@ -212,78 +210,94 @@ function is_attackable(board::Boardstate,position::Integer)::Bool
     knightmoves = moveset.knight[position+1]
     attacks |= (knightmoves & board.enemy_pieces[5])
 
-    if attacks > 0
-        return true
-    else
-        return false
-    end
+    return attacks
 end
 
 "returns true if move is legal, based on whether king is in check, castling is allowed, discovered checks etc"
-function is_legal(board::Boardstate,type::UInt8,position::Integer)::Bool
+function is_legal(board::Boardstate,type::UInt8,position::Integer,checks::UInt64)::Bool
     #king moves
     if type == 1
-        if is_attackable(board,position)
+        if attackable(board,position) > 0
             return false
         end
+    #if we can capture the sole checking piece it is legal
+    elseif setzero(checks,position) > 0
+        return false
     end
     return true
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
-function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,attackflag::Bool)::Vector{Move}
+function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,checks::UInt64,attackflag::Bool)::Vector{Move}
     locs = identify_locations(destinations)
-    moves = Vector{Move}(undef, length(locs))
-    for (i,loc) in enumerate(locs)
-        if is_legal(board,type,loc)
-         moves[i] = Move(type,origin,loc,attackflag)
+    moves = Vector{Move}()
+    for loc in locs
+        if is_legal(board,type,loc,checks)
+         push!(moves,Move(type,origin,loc,attackflag))
         end
     end
     return moves
 end
 
+"not yet implemented"
+function get_bishopmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+    return []
+end
+
+"not yet implemented"
+function get_rookmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+    return []
+end
+
 "returns attacks and quiet moves by the king"
-function get_kingmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
+function get_kingmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
     poss_moves = moveset.king[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(UInt8(1),board,attacks,location,true);
-    moves_from_location(UInt8(1),board,quiets,location,false)]
+    return [moves_from_location(UInt8(1),board,attacks,location,checks,true);
+    moves_from_location(UInt8(1),board,quiets,location,checks,false)]
+end
+
+"return both rook and bishop moves"
+function get_queenmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+    return [get_rookmoves(location,board,enemy_pcs,all_pcs,checks);
+    get_bishopmoves(location,board,enemy_pcs,all_pcs,checks)]
+end
+
+"not yet implemented"
+function get_pawnmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+    return []
 end
 
 "returns attacks and quiet moves by a knight"
-function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
+function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
     poss_moves = moveset.knight[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(UInt8(5),board,attacks,location,true);
-    moves_from_location(UInt8(5),board,quiets,location,false)]
+    return [moves_from_location(UInt8(5),board,attacks,location,checks,true);
+    moves_from_location(UInt8(5),board,quiets,location,checks,false)]
 end
 
-"uses integer ID to determine type of piece (returns a function)"
-function determine_piece(pieceID::Integer)
-    if pieceID == 1
-        return get_kingmoves
-    elseif pieceID == 5
-        return get_knightmoves
-    end
-end
+const get_piecemoves = [get_kingmoves,get_queenmoves,get_pawnmoves,get_bishopmoves,get_knightmoves,get_rookmoves]
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate)::Vector{Move}
     enemy_pcs = player_pieces(board.enemy_pieces)
     all_pcs = all_pieces(board)
+    checks = UInt64(0)
 
     movelist = Vector{Move}()
     for (pieceID,pieceBB) in enumerate(board.ally_pieces)
         if pieceBB > 0
             piece_locations = identify_locations(pieceBB)
-            get_moves = determine_piece(pieceID)
 
             for loc in piece_locations
-                #compiler might not like not knowing what function get_moves is ahead of time
-                #especially if the different functions have different numbers of methods
-                movelist = vcat(movelist,get_moves(loc,board,enemy_pcs,all_pcs))
+                #king is first piece looked at, need checking attackers for move generation
+                if pieceID == 1
+                    checks = attackable(board,loc)
+                end
+                #use an array of functions to get moves for different pieces
+                movelist = vcat(movelist,get_piecemoves[pieceID](loc,board,enemy_pcs,all_pcs,checks))
             end
         end
     end
@@ -309,5 +323,4 @@ function make_move!(move::Move,board::Boardstate)
     board.Halfmoves += 1
     board.Whitesmove = !board.Whitesmove
 end
-
 end

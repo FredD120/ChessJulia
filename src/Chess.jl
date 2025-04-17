@@ -236,7 +236,8 @@ function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #test knights and kings
-    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    FEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)

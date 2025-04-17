@@ -1,7 +1,6 @@
 using logic
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-all_moves = Move_BB()
 
 function test_setters()
     num = UInt64(1)
@@ -59,7 +58,7 @@ end
 test_player_pieces()
 
 function test_moveBB()
-    movestruct = Move_BB()
+    movestruct = logic.Move_BB()
     @assert length(movestruct.knight) == 64
     @assert movestruct.king[1] == UInt64(770)
 end
@@ -79,12 +78,6 @@ function test_iterators()
 end
 test_iterators()
 
-function test_determinepiece()
-    func = determine_piece(1)
-    @assert typeof(func) == typeof(get_kingmoves)
-end 
-test_determinepiece()
-
 function test_identifylocs()
     BB = UInt64(1) << 15 | UInt64(1) << 10
     locs = identify_locations(BB)
@@ -94,7 +87,9 @@ end
 test_identifylocs()
 
 function test_movfromloc()
-    moves = moves_from_location(UInt8(1),UInt64(3),2,false)
+    simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(simpleFEN)
+    moves = moves_from_location(UInt8(1),board,UInt64(3),2,UInt64(0),false)
     @assert length(moves) == 2
     @assert moves[1].iscapture == false
     @assert moves[2].from == 2
@@ -103,16 +98,25 @@ end
 test_movfromloc()
 
 function test_kingmoves()
-    moves = get_kingmoves(UInt8(0),all_moves,UInt64(0),UInt64(0))
+    simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(simpleFEN)
+    moves = get_kingmoves(UInt8(0),board,UInt64(0),UInt64(0),UInt64(0))
     @assert length(moves) == 3
-
 end
 test_kingmoves()
+
+function test_knightmoves()
+    simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(simpleFEN)
+    moves = get_knightmoves(UInt8(0),board,UInt64(0),UInt64(0),UInt64(0))
+    @assert length(moves) == 2
+end
+test_knightmoves()
 
 function test_movegetters()
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    moves = generate_moves(board,all_moves)
+    moves = generate_moves(board)
 
     attks = 0
     quiets = 0
@@ -124,7 +128,7 @@ function test_movegetters()
         end
     end
     @assert attks == 1
-    @assert quiets == 7
+    @assert quiets == 5
 end
 test_movegetters()
 
@@ -132,7 +136,7 @@ function test_makemove()
     #Test making a move with only one piece on the board
     basicFEN = "K7/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
-    moves = generate_moves(board,all_moves)
+    moves = generate_moves(board)
 
     @assert board.ally_pieces[1] == UInt64(1)
 
@@ -149,7 +153,7 @@ function test_makemove()
     #Test making a non-capture with two pieces on the board
     basicFEN = "Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
-    moves = generate_moves(board,all_moves)
+    moves = generate_moves(board)
 
     for m in moves
         if m.to == 8
@@ -158,12 +162,12 @@ function test_makemove()
     end
     @assert sum(board.ally_pieces)  == UInt64(1) << 1
     @assert board.enemy_pieces[1] == UInt64(1) << 8
-    @assert length(generate_moves(board,all_moves)) == 3
+    @assert length(generate_moves(board)) == 3
 
     #Test a black move
     basicFEN = "1n6/K7/8/8/8/8/8/8 b KQkq - 0 1"
     board = Boardstate(basicFEN)
-    moves = generate_moves(board,all_moves)
+    moves = generate_moves(board)
     @assert board.Whitesmove == false
     @assert length(moves) == 3
 
@@ -179,7 +183,7 @@ function test_makemove()
     #Test 3 pieces on the board
     basicFEN = "8/8/8/8/8/8/8/NNN5 w KQkq - 0 1"
     board = Boardstate(basicFEN)
-    moves = generate_moves(board,all_moves)
+    moves = generate_moves(board)
     @assert length(moves) == 9
     
     for m in moves
@@ -199,7 +203,7 @@ function test_capture()
     #WKing captures BKnight
     basicFEN = "Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
-    moves = generate_moves(board,all_moves)
+    moves = generate_moves(board)
 
     @assert sum(board.enemy_pieces) > 0
 
@@ -212,12 +216,48 @@ function test_capture()
     @assert sum(board.ally_pieces) == 0
     @assert board.enemy_pieces[1] == UInt64(2)
 
-    @assert length(generate_moves(board,all_moves)) == 0
+    @assert length(generate_moves(board)) == 0
 
     GUI = GUIposition(board)
     @assert GUI[2] == 1
     @assert sum(GUI) == 1
 end
 test_capture()
+
+function test_attackable()
+    basicFEN = "1k7/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+
+    attacks = logic.attackable(board,0)
+    @assert attacks == UInt(2)
+
+    attacks = logic.attackable(board,1)
+    @assert attacks == 0
+end
+test_attackable()
+
+function test_legal()
+    basicFEN = "K7/8/n7/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    checks = logic.attackable(board,0)
+
+    @assert checks == 0
+    @assert logic.is_legal(board,UInt8(1),1,checks) == false
+
+    knightFEN = "K7/8/1nnn4/8/N7/8/8/8 w KQkq - 0 1"
+    board = Boardstate(knightFEN)
+
+    moves = generate_moves(board)
+    @assert length(moves) == 1
+    @assert moves[1].iscapture == true
+    @assert moves[1].piece_type == 5
+
+    kingFEN = "Kkk5/8/1nnn4/8/N7/8/8/8 w KQkq - 0 1"
+    board = Boardstate(kingFEN)
+
+    moves = generate_moves(board)
+    @assert length(moves) == 0
+end
+test_legal()
 
 println("All tests passed")
