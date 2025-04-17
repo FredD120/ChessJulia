@@ -1,8 +1,34 @@
 module logic
 
 export GUIposition, setone, setzero, Boardstate, player_pieces, all_pieces,
-Move_BB, piece_iterator, get_kingmoves, get_knightmoves, make_move!,
+piece_iterator, get_kingmoves, get_knightmoves, make_move!,
 determine_piece, identify_locations, moves_from_location, generate_moves, Move
+
+"take in all possible moves for a given piece from a txt file"
+function read_moves(piece_name)
+    moves = Vector{UInt64}(undef,64)
+    movelist = readlines("$(dirname(@__DIR__))/move_BBs/$(piece_name).txt")
+    for (i,m) in enumerate(movelist)
+        moves[i] = parse(UInt64,m)
+    end   
+    return moves
+end
+
+struct Move_BB
+    king::Vector{UInt64}
+    knight::Vector{UInt64}
+end
+
+"constructor for Move_BB that reads all moves from txt files"
+function Move_BB()
+    king_mvs = read_moves("king")
+    knight_mvs = read_moves("knight")
+    return Move_BB(king_mvs,knight_mvs)
+end
+
+if !isdefined(@__MODULE__, :moveset) #REPL hack
+    const moveset = Move_BB()
+end
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
@@ -158,28 +184,6 @@ function GUIposition(board::Boardstate)
     return position
 end
 
-"take in all possible moves for a given piece from a txt file"
-function read_moves(piece_name)
-    moves = Vector{UInt64}(undef,64)
-    movelist = readlines("$(dirname(@__DIR__))/move_BBs/$(piece_name).txt")
-    for (i,m) in enumerate(movelist)
-        moves[i] = parse(UInt64,m)
-    end   
-    return moves
-end
-
-struct Move_BB
-    king::Vector{UInt64}
-    knight::Vector{UInt64}
-end
-
-"constructor for Move_BB that reads all moves from txt files"
-function Move_BB()
-    king_mvs = read_moves("king")
-    knight_mvs = read_moves("knight")
-    return Move_BB(king_mvs,knight_mvs)
-end
-
 struct Move
     piece_type::UInt8
     from::UInt32
@@ -198,30 +202,62 @@ function identify_locations(pieceBB::UInt64)::Vector{UInt8}
     return locations
 end
 
+"checks enemy pieces to see if any are attacking the current square"
+function is_attackable(board::Boardstate,position::Integer)::Bool
+    attacks = UInt64(0)
+
+    kingmoves = moveset.king[position+1]
+    attacks |= (kingmoves & board.enemy_pieces[1])
+
+    knightmoves = moveset.knight[position+1]
+    attacks |= (knightmoves & board.enemy_pieces[5])
+
+    if attacks > 0
+        return true
+    else
+        return false
+    end
+end
+
+"returns true if move is legal, based on whether king is in check, castling is allowed, discovered checks etc"
+function is_legal(board::Boardstate,type::UInt8,position::Integer)::Bool
+    #king moves
+    if type == 1
+        if is_attackable(board,position)
+            return false
+        end
+    end
+    return true
+end
+
 "creates a move from a given location using the Move struct, with flag for attacks"
-function moves_from_location(type::UInt8,destinations::UInt64,origin::Integer,attackflag::Bool)::Vector{Move}
+function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,attackflag::Bool)::Vector{Move}
     locs = identify_locations(destinations)
     moves = Vector{Move}(undef, length(locs))
     for (i,loc) in enumerate(locs)
-        moves[i] = Move(type,origin,loc,attackflag)
+        if is_legal(board,type,loc)
+         moves[i] = Move(type,origin,loc,attackflag)
+        end
     end
     return moves
 end
 
 "returns attacks and quiet moves by the king"
-function get_kingmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
+function get_kingmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
     poss_moves = moveset.king[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(UInt8(1),attacks,location,true);moves_from_location(UInt8(1),quiets,location,false)]
+    return [moves_from_location(UInt8(1),board,attacks,location,true);
+    moves_from_location(UInt8(1),board,quiets,location,false)]
 end
 
 "returns attacks and quiet moves by a knight"
-function get_knightmoves(location::UInt8,moveset::Move_BB,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
+function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64)::Vector{Move}
     poss_moves = moveset.knight[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(UInt8(5),attacks,location,true);moves_from_location(UInt8(5),quiets,location,false)]
+    return [moves_from_location(UInt8(5),board,attacks,location,true);
+    moves_from_location(UInt8(5),board,quiets,location,false)]
 end
 
 "uses integer ID to determine type of piece (returns a function)"
@@ -234,7 +270,7 @@ function determine_piece(pieceID::Integer)
 end
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
-function generate_moves(board::Boardstate,moveset::Move_BB)::Vector{Move}
+function generate_moves(board::Boardstate)::Vector{Move}
     enemy_pcs = player_pieces(board.enemy_pieces)
     all_pcs = all_pieces(board)
 
@@ -247,7 +283,7 @@ function generate_moves(board::Boardstate,moveset::Move_BB)::Vector{Move}
             for loc in piece_locations
                 #compiler might not like not knowing what function get_moves is ahead of time
                 #especially if the different functions have different numbers of methods
-                movelist = vcat(movelist,get_moves(loc,moveset,enemy_pcs,all_pcs))
+                movelist = vcat(movelist,get_moves(loc,board,enemy_pcs,all_pcs))
             end
         end
     end

@@ -138,8 +138,9 @@ function render_pieces(renderer,piece_width,position,tex_vec)
 end
 
 "update gui based on mouse click to indicate legal moves"
-function mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
+function mouse_clicked(mouse_pos,legal_moves,DEBUG)
     if DEBUG
+        all_moves = logic.Move_BB()
         piecemoves = all_moves.king[mouse_pos+1]
         return identify_locations(piecemoves)
     else
@@ -166,8 +167,7 @@ end
 function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,DEBUG=false)
     logicstate = logic.Boardstate(FEN)
     position = logic.GUIposition(logicstate)
-    all_moves = logic.Move_BB()
-    legal_moves = logic.generate_moves(logicstate,all_moves)
+    legal_moves = logic.generate_moves(logicstate)
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     try
@@ -193,13 +193,13 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                             #update positions of pieces in GUI representation
                             position = GUIposition(logicstate)
                             #generate new set of moves
-                            legal_moves = generate_moves(logicstate,all_moves)
+                            legal_moves = generate_moves(logicstate)
                         end
                         #reset square clicked on to nothing
                         highlight_moves = []
                         sq_clicked = -1
                     else
-                        highlight_moves = mouse_clicked(mouse_pos,legal_moves,all_moves,DEBUG)
+                        highlight_moves = mouse_clicked(mouse_pos,legal_moves,DEBUG)
                         sq_clicked = mouse_pos
                     end
                 end
