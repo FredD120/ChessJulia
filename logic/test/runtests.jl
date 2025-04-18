@@ -257,6 +257,7 @@ function test_legal()
 
     moves = generate_moves(board)
     @assert length(moves) == 0
+    @assert board.State == Loss()
 end
 test_legal()
 

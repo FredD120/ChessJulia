@@ -202,6 +202,15 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                         highlight_moves = mouse_clicked(mouse_pos,legal_moves,DEBUG)
                         sq_clicked = mouse_pos
                     end
+                    if logicstate.State != Neutral()
+                        if logicstate.State == Draw()
+                            println("Game over: Draw")
+                        elseif logicstate.Whitesmove
+                            println("Game over: Black wins")
+                        else
+                            println("Game over: White wins")
+                        end
+                    end
                 end
             end
 
@@ -236,8 +245,7 @@ function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #test knights and kings
-    #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
-    FEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
+    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)

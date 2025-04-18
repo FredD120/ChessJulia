@@ -1,7 +1,7 @@
 module logic
 
 export GUIposition, setone, setzero, Boardstate, player_pieces, all_pieces,
-piece_iterator, get_kingmoves, get_knightmoves, make_move!,
+piece_iterator, get_kingmoves, get_knightmoves, make_move!, Neutral, Loss, Draw,
 determine_piece, identify_locations, moves_from_location, generate_moves, Move
 
 "take in all possible moves for a given piece from a txt file"
@@ -32,6 +32,12 @@ setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
 setzero(num::UInt64,index::Integer) = num & ~(UInt64(1) << index)
 
+struct Neutral end
+struct Loss end
+struct Draw end
+
+const GameState = Union{Neutral,Loss,Draw}
+
 mutable struct Boardstate
     ally_pieces::Vector{UInt64}
     enemy_pieces::Vector{UInt64}
@@ -39,6 +45,7 @@ mutable struct Boardstate
     EnPassant::UInt64
     Halfmoves::UInt32
     Whitesmove::Bool
+    State::GameState
 end
 
 "Initialise a boardstate from a FEN string"
@@ -149,11 +156,11 @@ function Boardstate(FEN)
     if Whitesmove
         Boardstate([WKing,WQueen,WPawn,WBishop,WKnight,WRook],
         [BKing,BQueen,BPawn,BBishop,BKnight,BRook],
-        Castling,EnPassant,Halfmoves,Whitesmove)
+        Castling,EnPassant,Halfmoves,Whitesmove,Neutral())
     else
         Boardstate([BKing,BQueen,BPawn,BBishop,BKnight,BRook],
         [WKing,WQueen,WPawn,WBishop,WKnight,WRook],
-        Castling,EnPassant,Halfmoves,Whitesmove)
+        Castling,EnPassant,Halfmoves,Whitesmove,Neutral())
     end
 end
 
@@ -299,6 +306,14 @@ function generate_moves(board::Boardstate)::Vector{Move}
                 #use an array of functions to get moves for different pieces
                 movelist = vcat(movelist,get_piecemoves[pieceID](loc,board,enemy_pcs,all_pcs,checks))
             end
+        end
+    end
+
+    if length(movelist) == 0
+        if checks > 0
+            board.State = Loss()
+        else
+            board.State = Draw()
         end
     end
     return movelist
