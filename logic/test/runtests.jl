@@ -91,7 +91,7 @@ function test_movfromloc()
     board = Boardstate(simpleFEN)
     moves = moves_from_location(UInt8(1),board,UInt64(3),2,UInt64(0),false)
     @assert length(moves) == 2
-    @assert moves[1].iscapture == false
+    @assert moves[1].capture_type == 0
     @assert moves[2].from == 2
     @assert moves[1].piece_type == 1
 end
@@ -121,7 +121,7 @@ function test_movegetters()
     attks = 0
     quiets = 0
     for m in moves 
-        if m.iscapture
+        if m.capture_type > 0 
             attks+=1
         else 
             quiets+=1
@@ -129,6 +129,13 @@ function test_movegetters()
     end
     @assert attks == 1
     @assert quiets == 5
+
+    simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(simpleFEN)
+    board.Halfmoves = 100
+    moves = generate_moves(board)
+    @assert length(moves) == 0
+    @assert board.State == Draw()
 end
 test_movegetters()
 
@@ -208,7 +215,7 @@ function test_capture()
     @assert sum(board.enemy_pieces) > 0
 
     for m in moves
-        if m.iscapture 
+        if m.capture_type > 0
             make_move!(m,board)
         end
     end
@@ -249,7 +256,7 @@ function test_legal()
 
     moves = generate_moves(board)
     @assert length(moves) == 1
-    @assert moves[1].iscapture == true
+    @assert moves[1].capture_type > 0
     @assert moves[1].piece_type == 5
 
     kingFEN = "Kkk5/8/1nnn4/8/N7/8/8/8 w KQkq - 0 1"
@@ -260,5 +267,16 @@ function test_legal()
     @assert board.State == Loss()
 end
 test_legal()
+
+function test_identifyID()
+    basicFEN = "1N7/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    ID = logic.identify_piecetype(board.ally_pieces,1)
+    @assert ID == 5
+
+    ID = logic.identify_piecetype(board.ally_pieces,2)
+    @assert ID == 0
+end
+test_identifyID()
 
 println("All tests passed")

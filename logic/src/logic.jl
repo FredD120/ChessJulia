@@ -193,7 +193,7 @@ struct Move
     piece_type::UInt8
     from::UInt32
     to::UInt32
-    iscapture::Bool
+    capture_type::UInt8
 end
 
 "returns a number between 0 and 63 to indicate where we are on a chessboard"
@@ -205,6 +205,18 @@ function identify_locations(pieceBB::UInt64)::Vector{UInt8}
         end
     end
     return locations
+end
+
+"loop through a list of piece BBs for one colour and return ID of enemy piece at a location"
+function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UInt8
+    ID = UInt8(0)
+    for (pieceID,pieceBB) in enumerate(one_side_BBs)
+        if pieceBB & (UInt64(1) << location) > 0
+            ID = pieceID
+            break
+        end
+    end
+    return ID
 end
 
 "checks enemy pieces to see if any are attacking the current square, returns BB of attackers"
@@ -235,12 +247,17 @@ function is_legal(board::Boardstate,type::UInt8,position::Integer,checks::UInt64
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
-function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,checks::UInt64,attackflag::Bool)::Vector{Move}
+function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,checks::UInt64,isattack::Bool)::Vector{Move}
     locs = identify_locations(destinations)
     moves = Vector{Move}()
     for loc in locs
         if is_legal(board,type,loc,checks)
-         push!(moves,Move(type,origin,loc,attackflag))
+            attacked_pieceID = UInt8(0)
+            if isattack
+                #move struct needs info on piece being attacked
+                attacked_pieceID = identify_piecetype(board.enemy_pieces,loc)
+            end
+            push!(moves,Move(type,origin,loc,attacked_pieceID))
         end
     end
     return moves
@@ -289,11 +306,15 @@ const get_piecemoves = [get_kingmoves,get_queenmoves,get_pawnmoves,get_bishopmov
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate)::Vector{Move}
+    movelist = Vector{Move}()
+    #implement 50 move rule
+    if board.Halfmoves >= 100
+        board.State = Draw()
+    else
     enemy_pcs = player_pieces(board.enemy_pieces)
     all_pcs = all_pieces(board)
     checks = UInt64(0)
 
-    movelist = Vector{Move}()
     for (pieceID,pieceBB) in enumerate(board.ally_pieces)
         if pieceBB > 0
             piece_locations = identify_locations(pieceBB)
@@ -316,6 +337,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
             board.State = Draw()
         end
     end
+    end
     return movelist
 end
 
@@ -335,7 +357,11 @@ function make_move!(move::Move,board::Boardstate)
         board.ally_pieces[i] = setzero(enemy,move.to)
     end
 
-    board.Halfmoves += 1
+    if move.capture_type > 0
+        board.Halfmoves = 0
+    else
+        board.Halfmoves += 1
+    end
     board.Whitesmove = !board.Whitesmove
 end
 end
