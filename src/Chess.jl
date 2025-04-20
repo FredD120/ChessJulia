@@ -142,7 +142,7 @@ function mouse_clicked(mouse_pos,legal_moves,DEBUG)
     if DEBUG
         all_moves = logic.Move_BB()
         piecemoves = all_moves.king[mouse_pos+1]
-        return identify_locations(piecemoves)
+        return logic.identify_locations(piecemoves)
     else
         highlight = []
         for move in legal_moves
@@ -205,7 +205,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                     if logicstate.State != Neutral()
                         if logicstate.State == Draw()
                             println("Game over: Draw")
-                        elseif logicstate.Whitesmove
+                        elseif Whitesmove(logicstate)
                             println("Game over: Black wins")
                         else
                             println("Game over: White wins")

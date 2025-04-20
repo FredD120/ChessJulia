@@ -5,27 +5,27 @@ const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 function test_setters()
     num = UInt64(1)
 
-    num = setone(num,1)
+    num = logic.setone(num,1)
     @assert num == UInt64(3)
 
-    num = setzero(num,0)
+    num = logic.setzero(num,0)
     @assert num == UInt64(2)
-    num = setzero(num,1)
+    num = logic.setzero(num,1)
     @assert num == UInt64(0)
 
     num2 = UInt64(2)
-    @assert setzero(num2,8) == UInt64(2)
+    @assert logic.setzero(num2,8) == UInt64(2)
 end
 test_setters()
 
 function test_boardinit()
     board = Boardstate(FEN)
-    @assert board.Whitesmove == true
+    @assert Whitesmove(board) == true
     @assert board.EnPassant == UInt64(0)
-    @assert board.ally_pieces[3] != UInt64(0)
-    @assert board.enemy_pieces[3] != UInt64(0)
-    @assert board.enemy_pieces[1] == UInt64(1) << 4
-    @assert board.ally_pieces[1] == UInt64(1) << 60
+    @assert logic.ally_pieces(board)[3] != UInt64(0)
+    @assert logic.enemy_pieces(board)[3] != UInt64(0)
+    @assert logic.enemy_pieces(board)[1] == UInt64(1) << 4
+    @assert logic.ally_pieces(board)[1] == UInt64(1) << 60
     @assert board.Halfmoves == 0
 end
 test_boardinit()
@@ -41,9 +41,9 @@ test_GUIboard()
 
 function test_player_pieces()
     board = Boardstate(FEN)
-    white = player_pieces(board.ally_pieces)
-    black = player_pieces(board.enemy_pieces)
-    all = all_pieces(board)
+    white = logic.player_pieces(logic.ally_pieces(board))
+    black = logic.player_pieces(logic.enemy_pieces(board))
+    all = logic.player_pieces(board.pieces)
     compareW = UInt64(0)
     compareB = UInt64(0)
 
@@ -66,13 +66,13 @@ test_moveBB()
 
 function test_iterators()
     board = Boardstate(FEN)
-    pieces = piece_iterator(board)
+    pieces = board.pieces
     @assert length(pieces) == 12
-    @assert typeof(pieces) == typeof(Vector{UInt64}())
-    wpieces = board.ally_pieces
+    pieces::Matrix{UInt64}
+    wpieces = logic.ally_pieces(board)
     @assert length(wpieces) == 6
     @assert typeof(wpieces) == typeof(Vector{UInt64}())
-    bpieces = board.enemy_pieces
+    bpieces = logic.enemy_pieces(board)
     @assert length(bpieces) == 6
     @assert typeof(bpieces) == typeof(Vector{UInt64}())
 end
@@ -80,7 +80,7 @@ test_iterators()
 
 function test_identifylocs()
     BB = UInt64(1) << 15 | UInt64(1) << 10
-    locs = identify_locations(BB)
+    locs = logic.identify_locations(BB)
     @assert length(locs) == 2
     @assert locs[1] * locs[2] == 150
 end
@@ -89,7 +89,7 @@ test_identifylocs()
 function test_movfromloc()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    moves = moves_from_location(UInt8(1),board,UInt64(3),2,UInt64(0),false)
+    moves = logic.moves_from_location(UInt8(1),board,UInt64(3),2,UInt64(0),false)
     @assert length(moves) == 2
     @assert moves[1].capture_type == 0
     @assert moves[2].from == 2
@@ -100,7 +100,7 @@ test_movfromloc()
 function test_kingmoves()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    moves = get_kingmoves(UInt8(0),board,UInt64(0),UInt64(0),UInt64(0))
+    moves = logic.get_kingmoves(UInt8(0),board,UInt64(0),UInt64(0),UInt64(0))
     @assert length(moves) == 3
 end
 test_kingmoves()
@@ -108,7 +108,7 @@ test_kingmoves()
 function test_knightmoves()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    moves = get_knightmoves(UInt8(0),board,UInt64(0),UInt64(0),UInt64(0))
+    moves = logic.get_knightmoves(UInt8(0),board,UInt64(0),UInt64(0),UInt64(0))
     @assert length(moves) == 2
 end
 test_knightmoves()
@@ -145,7 +145,7 @@ function test_makemove()
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
 
-    @assert board.ally_pieces[1] == UInt64(1)
+    @assert logic.ally_pieces(board)[1] == UInt64(1)
 
     for m in moves
         if m.to == 1
@@ -153,9 +153,9 @@ function test_makemove()
         end
     end
 
-    @assert board.Whitesmove == false
+    @assert Whitesmove(board) == false
     @assert board.Halfmoves == UInt32(1)
-    @assert board.enemy_pieces[1] == UInt64(2)
+    @assert logic.enemy_pieces(board)[1] == UInt64(2)
 
     #Test making a non-capture with two pieces on the board
     basicFEN = "Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
@@ -168,14 +168,14 @@ function test_makemove()
         end
     end
     @assert sum(board.ally_pieces)  == UInt64(1) << 1
-    @assert board.enemy_pieces[1] == UInt64(1) << 8
+    @assert logic.enemy_pieces(board)[1] == UInt64(1) << 8
     @assert length(generate_moves(board)) == 3
 
     #Test a black move
     basicFEN = "1n6/K7/8/8/8/8/8/8 b KQkq - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
-    @assert board.Whitesmove == false
+    @assert Whitesmove(board) == false
     @assert length(moves) == 3
 
     for m in moves
@@ -198,7 +198,7 @@ function test_makemove()
             make_move!(m,board)
         end
     end
-    @assert board.Whitesmove == false
+    @assert Whitesmove(board) == false
     @assert sum(board.ally_pieces) == 0
 
     GUI = GUIposition(board)

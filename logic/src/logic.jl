@@ -1,8 +1,6 @@
 module logic
 
-export GUIposition, setone, setzero, Boardstate, player_pieces, all_pieces,
-piece_iterator, get_kingmoves, get_knightmoves, make_move!, Neutral, Loss, Draw,
-determine_piece, identify_locations, moves_from_location, generate_moves, Move
+export GUIposition, Boardstate, make_move!, Neutral, Loss, Draw, generate_moves, Move, Whitesmove
 
 "take in all possible moves for a given piece from a txt file"
 function read_moves(piece_name)
@@ -39,12 +37,11 @@ struct Draw end
 const GameState = Union{Neutral,Loss,Draw}
 
 mutable struct Boardstate
-    ally_pieces::Vector{UInt64}
-    enemy_pieces::Vector{UInt64}
+    pieces::Matrix{UInt64}
     Castling::UInt64
     EnPassant::UInt64
     Halfmoves::UInt32
-    Whitesmove::Bool
+    ColourIndex::UInt8
     State::GameState
 end
 
@@ -65,7 +62,7 @@ function Boardstate(FEN)
     Castling = UInt64(0)
     EnPassant = UInt64(0)
     Halfmoves = UInt32(0)
-    Whitesmove = Bool(true)
+    ColourIndex = UInt8(0)
     rank = nothing
     file = nothing
 
@@ -123,9 +120,9 @@ function Boardstate(FEN)
         #Determine whose turn it is
         elseif num_spaces == 1
             if c == 'w'
-                Whitesmove = true
+                ColourIndex = UInt8(0)
             elseif c == 'b'
-                Whitesmove = false
+                ColourIndex = UInt8(1)
             end
         #castling rights
         elseif num_spaces == 2
@@ -153,18 +150,20 @@ function Boardstate(FEN)
         end
     end
 
-    if Whitesmove
-        Boardstate([WKing,WQueen,WPawn,WBishop,WKnight,WRook],
-        [BKing,BQueen,BPawn,BBishop,BKnight,BRook],
-        Castling,EnPassant,Halfmoves,Whitesmove,Neutral())
-    else
-        Boardstate([BKing,BQueen,BPawn,BBishop,BKnight,BRook],
-        [WKing,WQueen,WPawn,WBishop,WKnight,WRook],
-        Castling,EnPassant,Halfmoves,Whitesmove,Neutral())
-    end
+    Boardstate([WKing   BKing; 
+                WQueen  BQueen;
+                WPawn   BPawn;
+                WBishop BBishop; 
+                WKnight BKnight;
+                WRook   BRook],
+    Castling,EnPassant,Halfmoves,ColourIndex,Neutral())
 end
 
-function player_pieces(piece_vec::Vector{UInt64})
+"Helper function to determine whose move it is"
+Whitesmove(b::Boardstate) = b.ColourIndex == 0 ? true : false
+
+"Returns a single bitboard representing the positions of an array of pieces"
+function player_pieces(piece_vec::VecOrMat{UInt64})
     BB = UInt64(0)
     for piece in piece_vec
         BB |= piece
@@ -172,14 +171,14 @@ function player_pieces(piece_vec::Vector{UInt64})
     return BB
 end
 
-all_pieces(b::Boardstate) = player_pieces(vcat(b.ally_pieces,b.enemy_pieces))
-
-piece_iterator(b::Boardstate) = b.Whitesmove ? vcat(b.ally_pieces,b.enemy_pieces) : vcat(b.enemy_pieces,b.ally_pieces)
+"Helper functions for ease of coding"
+ally_pieces(b::Boardstate) = b.pieces[:,b.ColourIndex+1]
+enemy_pieces(b::Boardstate) = b.pieces[:,(b.ColourIndex+1)%2 + 1]
 
 "tells GUI where pieces are on the board"
 function GUIposition(board::Boardstate)
     position = zeros(UInt8,64)
-    for (pieceID,piece) in enumerate(piece_iterator(board))
+    for (pieceID,piece) in enumerate(board.pieces)
         for i in UInt64(0):UInt64(63)
             if piece & UInt64(1) << i > 0
                 position[i+1] = pieceID
@@ -187,13 +186,6 @@ function GUIposition(board::Boardstate)
         end
     end
     return position
-end
-
-struct Move
-    piece_type::UInt8
-    from::UInt32
-    to::UInt32
-    capture_type::UInt8
 end
 
 "returns a number between 0 and 63 to indicate where we are on a chessboard"
@@ -224,10 +216,10 @@ function attackable(board::Boardstate,position::Integer)::UInt64
     attacks = UInt64(0)
 
     kingmoves = moveset.king[position+1]
-    attacks |= (kingmoves & board.enemy_pieces[1])
+    attacks |= (kingmoves & enemy_pieces(board)[1])
 
     knightmoves = moveset.knight[position+1]
-    attacks |= (knightmoves & board.enemy_pieces[5])
+    attacks |= (knightmoves & enemy_pieces(board)[5])
 
     return attacks
 end
@@ -246,6 +238,13 @@ function is_legal(board::Boardstate,type::UInt8,position::Integer,checks::UInt64
     return true
 end
 
+struct Move
+    piece_type::UInt8
+    from::UInt32
+    to::UInt32
+    capture_type::UInt8
+end
+
 "creates a move from a given location using the Move struct, with flag for attacks"
 function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,checks::UInt64,isattack::Bool)::Vector{Move}
     locs = identify_locations(destinations)
@@ -255,7 +254,7 @@ function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,
             attacked_pieceID = UInt8(0)
             if isattack
                 #move struct needs info on piece being attacked
-                attacked_pieceID = identify_piecetype(board.enemy_pieces,loc)
+                attacked_pieceID = identify_piecetype(enemy_pieces(board),loc)
             end
             push!(moves,Move(type,origin,loc,attacked_pieceID))
         end
@@ -311,11 +310,11 @@ function generate_moves(board::Boardstate)::Vector{Move}
     if board.Halfmoves >= 100
         board.State = Draw()
     else
-    enemy_pcs = player_pieces(board.enemy_pieces)
-    all_pcs = all_pieces(board)
+    enemy_pcs = player_pieces(enemy_pieces(board))
+    all_pcs = player_pieces(board.pieces)
     checks = UInt64(0)
 
-    for (pieceID,pieceBB) in enumerate(board.ally_pieces)
+    for (pieceID,pieceBB) in enumerate(ally_pieces(board))
         if pieceBB > 0
             piece_locations = identify_locations(pieceBB)
 
@@ -344,17 +343,17 @@ end
 "modify boardstate by making a move"
 function make_move!(move::Move,board::Boardstate)
     #need to swap ally and enemy as well as deleting and replacing pieces
-    enemy_copy = copy(board.enemy_pieces)
+    enemy_copy = copy(enemy_pieces(board))
 
-    for (i,ally) in enumerate(board.ally_pieces)
+    for (i,ally) in enumerate(ally_pieces(board))
         if i == move.piece_type
             ally = setone(ally,move.to)
         end
-        board.enemy_pieces[i] = setzero(ally,move.from)
+        enemy_pieces(board)[i] = setzero(ally,move.from)
     end
 
     for (i,enemy) in enumerate(enemy_copy)
-        board.ally_pieces[i] = setzero(enemy,move.to)
+        ally_pieces(board)[i] = setzero(enemy,move.to)
     end
 
     if move.capture_type > 0
@@ -362,6 +361,6 @@ function make_move!(move::Move,board::Boardstate)
     else
         board.Halfmoves += 1
     end
-    board.Whitesmove = !board.Whitesmove
+    board.ColourIndex = (board.ColourIndex + 1)%2
 end
 end
