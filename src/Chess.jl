@@ -165,11 +165,12 @@ end
 
 "display pieces and chessboard on screen. enable clicking to show and make legal moves"
 function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,DEBUG=false)
-    logicstate = logic.Boardstate(FEN)
-    position = logic.GUIposition(logicstate)
-    legal_moves = logic.generate_moves(logicstate)
+    logicstate = Boardstate(FEN)
+    position = GUIposition(logicstate)
+    legal_moves = generate_moves(logicstate)
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
+    UNMAKE = true           #allow unmaking moves
     try
         close = false
         while !close
@@ -179,7 +180,17 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                 evt_ty = evt.type
                 if evt_ty == SDL_QUIT
                     close = true
-                    break
+                    break 
+                elseif UNMAKE & (evt_ty == SDL_KEYUP)
+                    #step backwards in move history
+                    unmake_move!(logicstate)
+                    #update positions of pieces in GUI representation
+                    position = GUIposition(logicstate)
+                    #generate new set of moves
+                    legal_moves = generate_moves(logicstate)
+                    #reset square clicked on to nothing
+                    highlight_moves = []
+                    sq_clicked = -1
                 elseif evt_ty == SDL_MOUSEBUTTONUP
                     mouse_evt = getproperty(evt,:button)
                     xpos = getproperty(mouse_evt,:x)

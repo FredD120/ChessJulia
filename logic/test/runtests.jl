@@ -21,12 +21,12 @@ test_setters()
 function test_boardinit()
     board = Boardstate(FEN)
     @assert Whitesmove(board) == true
-    @assert board.EnPassant == UInt64(0)
+    @assert board.Data.EnPassant[end] == UInt64(0)
     @assert logic.ally_pieces(board)[3] != UInt64(0)
     @assert logic.enemy_pieces(board)[3] != UInt64(0)
     @assert logic.enemy_pieces(board)[1] == UInt64(1) << 4
     @assert logic.ally_pieces(board)[1] == UInt64(1) << 60
-    @assert board.Halfmoves == 0
+    @assert board.Data.Halfmoves[end] == 0
 end
 test_boardinit()
 
@@ -132,7 +132,7 @@ function test_movegetters()
 
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    board.Halfmoves = 100
+    board.Data.Halfmoves[end] = 100
     moves = generate_moves(board)
     @assert length(moves) == 0
     @assert board.State == Draw()
@@ -154,7 +154,7 @@ function test_makemove()
     end
 
     @assert Whitesmove(board) == false
-    @assert board.Halfmoves == UInt32(1)
+    @assert board.Data.Halfmoves[end] == UInt8(1)
     @assert logic.enemy_pieces(board)[1] == UInt64(2)
 
     #Test making a non-capture with two pieces on the board
@@ -167,7 +167,7 @@ function test_makemove()
             make_move!(m,board)
         end
     end
-    @assert sum(board.ally_pieces)  == UInt64(1) << 1
+    @assert sum(logic.ally_pieces(board))  == UInt64(1) << 1
     @assert logic.enemy_pieces(board)[1] == UInt64(1) << 8
     @assert length(generate_moves(board)) == 3
 
@@ -183,7 +183,7 @@ function test_makemove()
             make_move!(m,board)
         end
     end
-    @assert sum(board.enemy_pieces) == UInt64(1) << 11
+    @assert sum(logic.enemy_pieces(board)) == UInt64(1) << 11
     GUI = GUIposition(board)
     @assert GUI[12] == 11
 
@@ -199,7 +199,7 @@ function test_makemove()
         end
     end
     @assert Whitesmove(board) == false
-    @assert sum(board.ally_pieces) == 0
+    @assert sum(logic.ally_pieces(board)) == 0
 
     GUI = GUIposition(board)
     @assert GUI[42] == 5
@@ -212,7 +212,7 @@ function test_capture()
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
 
-    @assert sum(board.enemy_pieces) > 0
+    @assert sum(logic.enemy_pieces(board)) > 0
 
     for m in moves
         if m.capture_type > 0
@@ -220,8 +220,8 @@ function test_capture()
         end
     end
 
-    @assert sum(board.ally_pieces) == 0
-    @assert board.enemy_pieces[1] == UInt64(2)
+    @assert sum(logic.ally_pieces(board)) == 0
+    @assert logic.enemy_pieces(board)[1] == UInt64(2)
 
     @assert length(generate_moves(board)) == 0
 
@@ -271,12 +271,62 @@ test_legal()
 function test_identifyID()
     basicFEN = "1N7/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
-    ID = logic.identify_piecetype(board.ally_pieces,1)
+    ID = logic.identify_piecetype(logic.ally_pieces(board),1)
     @assert ID == 5
 
-    ID = logic.identify_piecetype(board.ally_pieces,2)
+    ID = logic.identify_piecetype(logic.ally_pieces(board),2)
     @assert ID == 0
 end
 test_identifyID()
+
+function test_unmake()
+    #WKing captures BKnight then unmake
+    basicFEN = "Kn6/8/8/8/8/8/8/8 w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+    moves = generate_moves(board)
+
+    for m in moves
+        if m.capture_type > 0
+            make_move!(m,board)
+        end
+    end
+    unmake_move!(board)
+
+    @assert Whitesmove(board) == true
+    @assert logic.ally_pieces(board)[1] == UInt64(1)
+    @assert logic.enemy_pieces(board)[5] == UInt64(2)
+
+    moves = generate_moves(board)
+    for m in moves
+        if m.to == 8
+            make_move!(m,board)
+        end
+    end
+    @assert board.pieces[1,1] == UInt(1) << 8
+    moves = generate_moves(board)
+    for m in moves
+        if m.to == 16
+            make_move!(m,board)
+        end
+    end
+    @assert board.pieces[5,2] == UInt(1) << 16
+    moves = generate_moves(board)
+    for m in moves
+        if m.capture_type == 5
+            make_move!(m,board)
+        end
+    end
+    @assert board.pieces[5,2] == 0
+    @assert length(board.Data.Halfmoves) == 2
+    unmake_move!(board)
+    unmake_move!(board)
+    unmake_move!(board)
+
+    @assert Whitesmove(board) == true
+    @assert logic.ally_pieces(board)[1] == UInt64(1)
+    @assert logic.enemy_pieces(board)[5] == UInt64(2)
+    @assert length(board.Data.Halfmoves) == 1
+end
+test_unmake()
 
 println("All tests passed")

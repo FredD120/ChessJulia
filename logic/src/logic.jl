@@ -1,6 +1,14 @@
 module logic
 
-export GUIposition, Boardstate, make_move!, Neutral, Loss, Draw, generate_moves, Move, Whitesmove
+export GUIposition, Boardstate, make_move!, unmake_move!,
+Neutral, Loss, Draw, generate_moves, Move, Whitesmove
+
+struct Move
+    piece_type::UInt8
+    from::UInt32
+    to::UInt32
+    capture_type::UInt8
+end
 
 "take in all possible moves for a given piece from a txt file"
 function read_moves(piece_name)
@@ -36,13 +44,20 @@ struct Draw end
 
 const GameState = Union{Neutral,Loss,Draw}
 
+mutable struct BoardData
+    Halfmoves::Vector{UInt8}
+    Castling::Vector{UInt64}
+    CastleCount::Vector{UInt8}
+    EnPassant::Vector{UInt64}
+    EPCount::Vector{UInt8}
+end
+
 mutable struct Boardstate
     pieces::Matrix{UInt64}
-    Castling::UInt64
-    EnPassant::UInt64
-    Halfmoves::UInt32
     ColourIndex::UInt8
     State::GameState
+    MoveHist::Vector{Move}
+    Data::BoardData
 end
 
 "Initialise a boardstate from a FEN string"
@@ -61,8 +76,9 @@ function Boardstate(FEN)
     BRook = UInt64(0)
     Castling = UInt64(0)
     EnPassant = UInt64(0)
-    Halfmoves = UInt32(0)
+    Halfmoves = UInt8(0)
     ColourIndex = UInt8(0)
+    MoveHistory = Vector{Move}()
     rank = nothing
     file = nothing
 
@@ -146,9 +162,13 @@ function Boardstate(FEN)
                 EnPassant = setone(EnPassant,(-rank+8)*8 + file-1)
             end
         elseif num_spaces == 4
-            Halfmoves = parse(UInt32,c)
+            Halfmoves = parse(UInt8,c)
         end
     end
+
+    data = BoardData(Vector{UInt8}([Halfmoves]),
+                     Vector{UInt64}([Castling]),Vector{UInt8}([0]),
+                     Vector{UInt64}([EnPassant]),Vector{UInt8}([0]))
 
     Boardstate([WKing   BKing; 
                 WQueen  BQueen;
@@ -156,11 +176,14 @@ function Boardstate(FEN)
                 WBishop BBishop; 
                 WKnight BKnight;
                 WRook   BRook],
-    Castling,EnPassant,Halfmoves,ColourIndex,Neutral())
+    ColourIndex,Neutral(),MoveHistory,data)
 end
 
 "Helper function to determine whose move it is"
 Whitesmove(b::Boardstate) = b.ColourIndex == 0 ? true : false
+
+"Helper function to return opposite colour index"
+Opposite(ColourIndex) = (ColourIndex+1)%2
 
 "Returns a single bitboard representing the positions of an array of pieces"
 function player_pieces(piece_vec::VecOrMat{UInt64})
@@ -238,13 +261,6 @@ function is_legal(board::Boardstate,type::UInt8,position::Integer,checks::UInt64
     return true
 end
 
-struct Move
-    piece_type::UInt8
-    from::UInt32
-    to::UInt32
-    capture_type::UInt8
-end
-
 "creates a move from a given location using the Move struct, with flag for attacks"
 function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,checks::UInt64,isattack::Bool)::Vector{Move}
     locs = identify_locations(destinations)
@@ -307,7 +323,7 @@ const get_piecemoves = [get_kingmoves,get_queenmoves,get_pawnmoves,get_bishopmov
 function generate_moves(board::Boardstate)::Vector{Move}
     movelist = Vector{Move}()
     #implement 50 move rule
-    if board.Halfmoves >= 100
+    if board.Data.Halfmoves[end] >= 100
         board.State = Draw()
     else
     enemy_pcs = player_pieces(enemy_pieces(board))
@@ -340,27 +356,55 @@ function generate_moves(board::Boardstate)::Vector{Move}
     return movelist
 end
 
-"modify boardstate by making a move"
+"utilises setzero and setone to move single piece"
+function move_piece!(pieces::Matrix{UInt64},CIndex,pieceID,from,to)
+    pieces[pieceID,CIndex+1] = setone(setzero(pieces[pieceID,CIndex+1],from),to)
+end
+
+"utilises setone to remove a piece from a position"
+function destroy_piece!(pieces::Matrix{UInt64},CIndex,pieceID,pos)
+    pieces[pieceID,CIndex+1] = setzero(pieces[pieceID,CIndex+1],pos)
+end
+
+"utilises setone to create a piece in a position"
+function create_piece!(pieces::Matrix{UInt64},CIndex,pieceID,pos)
+    pieces[pieceID,CIndex+1] = setone(pieces[pieceID,CIndex+1],pos)
+end
+
+"modify boardstate by making a move. increment halfmove count. add move to MoveHist"
 function make_move!(move::Move,board::Boardstate)
-    #need to swap ally and enemy as well as deleting and replacing pieces
-    enemy_copy = copy(enemy_pieces(board))
-
-    for (i,ally) in enumerate(ally_pieces(board))
-        if i == move.piece_type
-            ally = setone(ally,move.to)
-        end
-        enemy_pieces(board)[i] = setzero(ally,move.from)
-    end
-
-    for (i,enemy) in enumerate(enemy_copy)
-        ally_pieces(board)[i] = setzero(enemy,move.to)
-    end
+    move_piece!(board.pieces,board.ColourIndex,move.piece_type,move.from,move.to)
 
     if move.capture_type > 0
-        board.Halfmoves = 0
+        destroy_piece!(board.pieces,Opposite(board.ColourIndex),move.capture_type,move.to)
+        push!(board.Data.Halfmoves,0)
     else
-        board.Halfmoves += 1
+        board.Data.Halfmoves[end] += 1
     end
-    board.ColourIndex = (board.ColourIndex + 1)%2
+    board.ColourIndex = Opposite(board.ColourIndex)
+    push!(board.MoveHist,move)
+end
+
+"unmakes last move on MoveHist stack. currently doesn't restore halfmoves"
+function unmake_move!(board::Boardstate)
+    if length(board.MoveHist) > 0
+        move = board.MoveHist[end]
+        move_piece!(board.pieces,Opposite(board.ColourIndex),move.piece_type,move.to,move.from)
+
+        if move.capture_type > 0
+            create_piece!(board.pieces,board.ColourIndex,move.capture_type,move.to)
+        end
+
+        if board.Data.Halfmoves[end] > 0 
+            board.Data.Halfmoves[end] -= 1
+        else
+            pop!(board.Data.Halfmoves)
+        end
+
+        board.ColourIndex = Opposite(board.ColourIndex)
+        pop!(board.MoveHist)
+    else
+        println("Failed to unmake move: No move history")
+    end
 end
 end
