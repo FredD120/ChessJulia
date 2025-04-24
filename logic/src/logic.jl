@@ -1,7 +1,7 @@
 module logic
 
 export GUIposition, Boardstate, make_move!, unmake_move!,
-Neutral, Loss, Draw, generate_moves, Move, Whitesmove
+Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft
 
 struct Move
     piece_type::UInt8
@@ -406,5 +406,21 @@ function unmake_move!(board::Boardstate)
     else
         println("Failed to unmake move: No move history")
     end
+end
+
+function perft(board::Boardstate,depth)
+    leaf_nodes = 0
+    moves = generate_moves(board)
+
+    if depth == 1
+        return length(moves)
+    else
+        for move in moves
+            make_move!(move,board)
+            leaf_nodes += perft(board,depth-1)
+            unmake_move!(board)
+        end
+    end
+    return leaf_nodes
 end
 end

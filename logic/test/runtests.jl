@@ -1,5 +1,7 @@
 using logic
 
+const expensive = true
+
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 function test_setters()
@@ -328,5 +330,31 @@ function test_unmake()
     @assert length(board.Data.Halfmoves) == 1
 end
 test_unmake()
+
+function test_perft()
+    basicFEN = "K7/8/8/8/8/8/8/7k w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+
+    leaves = perft(board,2)
+    @assert leaves == 9
+end
+test_perft()
+
+function test_speed()
+    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    board = Boardstate(FEN)
+
+    t = time()
+    leaves = perft(board,5)
+    Δt = time() - t
+    println(leaves)
+    println(Δt)
+    return leaves / Δt
+end
+
+if expensive
+    nps = test_speed()
+    println("NPS = $nps")
+end
 
 println("All tests passed")
