@@ -1,7 +1,19 @@
 module logic
 
-export GUIposition, Boardstate, make_move!, unmake_move!,
+export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft
+
+using Random
+
+const White = UInt8(0)
+const Black = UInt8(6)
+const NULL_PIECE = UInt8(0)
+const King = 1
+const Queen = 2
+const Pawn = 3
+const Bishop = 4
+const Kinght = 5
+const Rook = 6
 
 struct Move
     piece_type::UInt8
@@ -53,7 +65,8 @@ mutable struct BoardData
 end
 
 mutable struct Boardstate
-    pieces::Matrix{UInt64}
+    pieces::Vector{UInt64}
+    #piece_list::Dict{UInt8,Vector{UInt8}}
     ColourIndex::UInt8
     State::GameState
     MoveHist::Vector{Move}
@@ -136,9 +149,9 @@ function Boardstate(FEN)
         #Determine whose turn it is
         elseif num_spaces == 1
             if c == 'w'
-                ColourIndex = UInt8(0)
+                ColourIndex = White
             elseif c == 'b'
-                ColourIndex = UInt8(1)
+                ColourIndex = Black
             end
         #castling rights
         elseif num_spaces == 2
@@ -170,20 +183,28 @@ function Boardstate(FEN)
                      Vector{UInt64}([Castling]),Vector{UInt8}([0]),
                      Vector{UInt64}([EnPassant]),Vector{UInt8}([0]))
 
-    Boardstate([WKing   BKing; 
-                WQueen  BQueen;
-                WPawn   BPawn;
-                WBishop BBishop; 
-                WKnight BKnight;
-                WRook   BRook],
+    Boardstate([WKing, WQueen, WPawn, WBishop, WKnight, WRook, 
+                BKing, BQueen, BPawn, BBishop, BKnight, BRook],
     ColourIndex,Neutral(),MoveHistory,data)
+end
+
+function UCIpos(pos)
+    file = pos % 8
+    rank = 8 - (pos - file)/8 
+    return ('a'+file)*string(Int(rank))
+end
+
+function UCImove(move::Move)
+    from = UCIpos(move.from)
+    to = UCIpos(move.to)
+    return from*to
 end
 
 "Helper function to determine whose move it is"
 Whitesmove(b::Boardstate) = b.ColourIndex == 0 ? true : false
 
 "Helper function to return opposite colour index"
-Opposite(ColourIndex) = (ColourIndex+1)%2
+Opposite(ColourIndex) = (ColourIndex+6)%12
 
 "Returns a single bitboard representing the positions of an array of pieces"
 function player_pieces(piece_vec::VecOrMat{UInt64})
@@ -195,8 +216,12 @@ function player_pieces(piece_vec::VecOrMat{UInt64})
 end
 
 "Helper functions for ease of coding"
-ally_pieces(b::Boardstate) = b.pieces[:,b.ColourIndex+1]
-enemy_pieces(b::Boardstate) = b.pieces[:,(b.ColourIndex+1)%2 + 1]
+ally_pieces(b::Boardstate) = b.pieces[b.ColourIndex+1:b.ColourIndex+6]
+
+function enemy_pieces(b::Boardstate) 
+    enemy_ind = Opposite(b.ColourIndex)
+    return b.pieces[enemy_ind+1:enemy_ind+6]
+end
 
 "tells GUI where pieces are on the board"
 function GUIposition(board::Boardstate)
@@ -224,7 +249,7 @@ end
 
 "loop through a list of piece BBs for one colour and return ID of enemy piece at a location"
 function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UInt8
-    ID = UInt8(0)
+    ID = NULL_PIECE
     for (pieceID,pieceBB) in enumerate(one_side_BBs)
         if pieceBB & (UInt64(1) << location) > 0
             ID = pieceID
@@ -267,7 +292,7 @@ function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,
     moves = Vector{Move}()
     for loc in locs
         if is_legal(board,type,loc,checks)
-            attacked_pieceID = UInt8(0)
+            attacked_pieceID = NULL_PIECE
             if isattack
                 #move struct needs info on piece being attacked
                 attacked_pieceID = identify_piecetype(enemy_pieces(board),loc)
@@ -336,7 +361,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
 
             for loc in piece_locations
                 #king is first piece looked at, need checking attackers for move generation
-                if pieceID == 1
+                if pieceID == King
                     checks = attackable(board,loc)
                 end
                 #use an array of functions to get moves for different pieces
@@ -357,18 +382,18 @@ function generate_moves(board::Boardstate)::Vector{Move}
 end
 
 "utilises setzero and setone to move single piece"
-function move_piece!(pieces::Matrix{UInt64},CIndex,pieceID,from,to)
-    pieces[pieceID,CIndex+1] = setone(setzero(pieces[pieceID,CIndex+1],from),to)
+function move_piece!(pieces::Vector{UInt64},CIndex,pieceID,from,to)
+    pieces[CIndex+pieceID] = setone(setzero(pieces[CIndex+pieceID],from),to)
 end
 
 "utilises setone to remove a piece from a position"
-function destroy_piece!(pieces::Matrix{UInt64},CIndex,pieceID,pos)
-    pieces[pieceID,CIndex+1] = setzero(pieces[pieceID,CIndex+1],pos)
+function destroy_piece!(pieces::Vector{UInt64},CIndex,pieceID,pos)
+    pieces[CIndex+pieceID] = setzero(pieces[CIndex+pieceID],pos)
 end
 
 "utilises setone to create a piece in a position"
-function create_piece!(pieces::Matrix{UInt64},CIndex,pieceID,pos)
-    pieces[pieceID,CIndex+1] = setone(pieces[pieceID,CIndex+1],pos)
+function create_piece!(pieces::Vector{UInt64},CIndex,pieceID,pos)
+    pieces[CIndex+pieceID] = setone(pieces[CIndex+pieceID],pos)
 end
 
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist"
@@ -408,7 +433,7 @@ function unmake_move!(board::Boardstate)
     end
 end
 
-function perft(board::Boardstate,depth)
+function perft(board::Boardstate,depth,verbose=false)
     leaf_nodes = 0
     moves = generate_moves(board)
 
@@ -417,7 +442,11 @@ function perft(board::Boardstate,depth)
     else
         for move in moves
             make_move!(move,board)
-            leaf_nodes += perft(board,depth-1)
+            nodecount = perft(board,depth-1)
+            if verbose == true
+             println(UCImove(move) * ": " * string(nodecount))
+            end
+            leaf_nodes += nodecount
             unmake_move!(board)
         end
     end

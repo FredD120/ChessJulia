@@ -70,7 +70,7 @@ function test_iterators()
     board = Boardstate(FEN)
     pieces = board.pieces
     @assert length(pieces) == 12
-    pieces::Matrix{UInt64}
+    pieces::Vector{UInt64}
     wpieces = logic.ally_pieces(board)
     @assert length(wpieces) == 6
     @assert typeof(wpieces) == typeof(Vector{UInt64}())
@@ -304,21 +304,21 @@ function test_unmake()
             make_move!(m,board)
         end
     end
-    @assert board.pieces[1,1] == UInt(1) << 8
+    @assert logic.enemy_pieces(board)[1] == UInt(1) << 8
     moves = generate_moves(board)
     for m in moves
         if m.to == 16
             make_move!(m,board)
         end
     end
-    @assert board.pieces[5,2] == UInt(1) << 16
+    @assert logic.enemy_pieces(board)[5] == UInt(1) << 16
     moves = generate_moves(board)
     for m in moves
         if m.capture_type == 5
             make_move!(m,board)
         end
     end
-    @assert board.pieces[5,2] == 0
+    @assert logic.ally_pieces(board)[5] == 0
     @assert length(board.Data.Halfmoves) == 2
     unmake_move!(board)
     unmake_move!(board)
@@ -341,20 +341,31 @@ end
 test_perft()
 
 function test_speed()
-    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1"
     board = Boardstate(FEN)
 
     t = time()
     leaves = perft(board,5)
+    @assert leaves == 11813050
     Δt = time() - t
-    println(leaves)
-    println(Δt)
     return leaves / Δt
 end
 
+function test_UCI()
+    str1 = logic.UCIpos(0)
+    str2 = logic.UCIpos(63)
+    @assert (str1 == "a8") & (str2 == "h1")
+
+    move = Move(1,2,54,0)
+    mvstr = UCImove(move)
+    @assert mvstr == "c8g2"
+end
+test_UCI()
+
 if expensive
     nps = test_speed()
-    println("NPS = $nps")
+    println("NPS = $nps nodes/second")
+    #best = 1.137e7
 end
 
 println("All tests passed")
