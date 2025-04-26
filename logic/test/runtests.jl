@@ -1,4 +1,5 @@
 using logic
+using BenchmarkTools
 
 const expensive = true
 
@@ -29,7 +30,6 @@ function test_boardinit()
     @assert logic.enemy_pieces(board)[1] == UInt64(1) << 4
     @assert logic.ally_pieces(board)[1] == UInt64(1) << 60
     @assert board.Data.Halfmoves[end] == 0
-    
 end
 test_boardinit()
 
@@ -349,9 +349,8 @@ function test_speed()
     leaves = perft(board,5)
     @assert leaves == 11813050
     Δt = time() - t
-    return leaves / Δt
+    return leaves,Δt
 end
-
 function test_UCI()
     str1 = logic.UCIpos(0)
     str2 = logic.UCIpos(63)
@@ -363,10 +362,23 @@ function test_UCI()
 end
 test_UCI()
 
+function benchmarkspeed(leafcount)
+    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1"
+    board = Boardstate(FEN)
+    depth = 5
+
+    trial = @benchmark perft($board,$depth)
+    minimum_time = minimum(trial).time * 1e-9
+
+    println("Benchmarked nps = $(leafcount/minimum_time)")
+end
+
 if expensive
-    nps = test_speed()
-    println("NPS = $nps nodes/second")
-    #best = 1.137e7
+    leaves,Δt = test_speed()
+    println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
+
+    benchmarkspeed(leaves)
+    #best = 1.256e7
 end
 
 println("All tests passed")

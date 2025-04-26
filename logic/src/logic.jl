@@ -66,7 +66,6 @@ end
 
 mutable struct Boardstate
     pieces::Vector{UInt64}
-    #piece_list::Vector{Vector{UInt8}}
     ColourIndex::UInt8
     State::GameState
     MoveHist::Vector{Move}
@@ -74,15 +73,13 @@ mutable struct Boardstate
 end
 
 "helper function when constructing a boardstate"
-function place_piece!(pieces::Vector{UInt64},piecelst::Vector{Vector{UInt8}},pieceID,pos)
+function place_piece!(pieces::Vector{UInt64},pieceID,pos)
     pieces[pieceID] = setone(pieces[pieceID],pos)
-    push!(piecelst[pieceID],UInt8(pos))
 end
 
 "Initialise a boardstate from a FEN string"
 function Boardstate(FEN)
     pieces = zeros(UInt64,12)
-    piece_list = [Vector{UInt8}([]) for _ in 1:12]
     Castling = UInt64(0)
     EnPassant = UInt64(0)
     Halfmoves = UInt8(0)
@@ -109,7 +106,7 @@ function Boardstate(FEN)
                 else
                     colour = Black
                 end
-                place_piece!(pieces,piece_list,FENdict[upperC]+colour,i)
+                place_piece!(pieces,FENdict[upperC]+colour,i)
                 i+=1
             elseif isnumeric(c)
                 i+=parse(Int,c)
@@ -151,8 +148,7 @@ function Boardstate(FEN)
                      Vector{UInt64}([Castling]),Vector{UInt8}([0]),
                      Vector{UInt64}([EnPassant]),Vector{UInt8}([0]))
 
-    Boardstate(pieces,#piece_list,
-    ColourIndex,Neutral(),MoveHistory,data)
+    Boardstate(pieces,ColourIndex,Neutral(),MoveHistory,data)
 end
 
 function UCIpos(pos)
@@ -206,10 +202,11 @@ end
 "returns a list of numbers between 0 and 63 to indicate positions on a chessboard"
 function identify_locations(pieceBB::UInt64)::Vector{UInt8}
     locations = Vector{UInt8}()
-    for i in UInt8(0):UInt8(63)
-        if pieceBB & UInt64(1) << i > 0
-            push!(locations,i)
-        end
+    temp_BB = pieceBB
+    while temp_BB != 0
+        loc = trailing_zeros(temp_BB) #find 0-indexed location of least significant bit in BB
+        push!(locations,loc)
+        temp_BB &= temp_BB - 1        #trick to remove least significant bit
     end
     return locations
 end
@@ -218,7 +215,7 @@ end
 function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UInt8
     ID = NULL_PIECE
     for (pieceID,pieceBB) in enumerate(one_side_BBs)
-        if pieceBB & (UInt64(1) << location) > 0
+        if pieceBB & (UInt64(1) << location) != 0
             ID = pieceID
             break
         end
@@ -324,9 +321,8 @@ function generate_moves(board::Boardstate)::Vector{Move}
 
     for (pieceID,pieceBB) in enumerate(ally_pieces(board))
         if pieceBB > 0
-            #pc_list = board.piece_list[pieceID+board.ColourIndex]
-            pc_list = identify_locations(pieceBB)
-            for loc in pc_list
+            loc_list = identify_locations(pieceBB)
+            for loc in loc_list
                 #king is first piece looked at, need checking attackers for move generation
                 if pieceID == King
                     checks = attackable(board,loc)
@@ -356,20 +352,17 @@ end
 "utilises setzero to remove a piece from a position"
 function destroy_piece!(B::Boardstate,CIndex,pieceID,pos)
     B.pieces[CIndex+pieceID] = setzero(B.pieces[CIndex+pieceID],pos)
-    #remove!(B.piece_list[CIndex+pieceID],pos)
 end
 
 "utilises setone to create a piece in a position"
 function create_piece!(B::Boardstate,CIndex,pieceID,pos)
     B.pieces[CIndex+pieceID] = setone(B.pieces[CIndex+pieceID],pos)
-    #push!(B.piece_list[CIndex+pieceID],pos)
 end
 
 "utilises create and destroy to move single piece"
 function move_piece!(B::Boardstate,CIndex,pieceID,from,to)
     B.pieces[CIndex+pieceID] = setzero(B.pieces[CIndex+pieceID],from)
     B.pieces[CIndex+pieceID] = setone(B.pieces[CIndex+pieceID],to)
-    #replace!(B.piece_list[CIndex+pieceID],from=>to)
 end
 
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist"
