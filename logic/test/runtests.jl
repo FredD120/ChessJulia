@@ -29,6 +29,7 @@ function test_boardinit()
     @assert logic.enemy_pieces(board)[1] == UInt64(1) << 4
     @assert logic.ally_pieces(board)[1] == UInt64(1) << 60
     @assert board.Data.Halfmoves[end] == 0
+    
 end
 test_boardinit()
 

@@ -8,12 +8,12 @@ using Random
 const White = UInt8(0)
 const Black = UInt8(6)
 const NULL_PIECE = UInt8(0)
-const King = 1
-const Queen = 2
-const Pawn = 3
-const Bishop = 4
-const Kinght = 5
-const Rook = 6
+const King = UInt8(1)
+const Queen = UInt8(2)
+const Pawn = UInt8(3)
+const Bishop = UInt8(4)
+const Knight = UInt8(5)
+const Rook = UInt8(6)
 
 struct Move
     piece_type::UInt8
@@ -66,27 +66,23 @@ end
 
 mutable struct Boardstate
     pieces::Vector{UInt64}
-    #piece_list::Dict{UInt8,Vector{UInt8}}
+    #piece_list::Vector{Vector{UInt8}}
     ColourIndex::UInt8
     State::GameState
     MoveHist::Vector{Move}
     Data::BoardData
 end
 
+"helper function when constructing a boardstate"
+function place_piece!(pieces::Vector{UInt64},piecelst::Vector{Vector{UInt8}},pieceID,pos)
+    pieces[pieceID] = setone(pieces[pieceID],pos)
+    push!(piecelst[pieceID],UInt8(pos))
+end
+
 "Initialise a boardstate from a FEN string"
 function Boardstate(FEN)
-    WKing = UInt64(0)
-    WQueen = UInt64(0)
-    WPawn = UInt64(0)
-    WBishop = UInt64(0)
-    WKnight = UInt64(0)
-    WRook = UInt64(0)
-    BKing = UInt64(0)
-    BQueen = UInt64(0)
-    BPawn = UInt64(0)
-    BBishop = UInt64(0)
-    BKnight = UInt64(0)
-    BRook = UInt64(0)
+    pieces = zeros(UInt64,12)
+    piece_list = [Vector{UInt8}([]) for _ in 1:12]
     Castling = UInt64(0)
     EnPassant = UInt64(0)
     Halfmoves = UInt8(0)
@@ -94,6 +90,7 @@ function Boardstate(FEN)
     MoveHistory = Vector{Move}()
     rank = nothing
     file = nothing
+    FENdict = Dict('K'=>King,'Q'=>Queen,'P'=>Pawn,'B'=>Bishop,'N'=>Knight,'R'=>Rook)
 
     #Keep track of where we are on chessboard
     i = UInt32(0)         
@@ -105,44 +102,15 @@ function Boardstate(FEN)
             num_spaces += 1
         #Positions of  pieces
         elseif num_spaces == 0
-            if c == 'K'
-                WKing = setone(WKing,i)
+            if isletter(c)
+                upperC = uppercase(c)
+                if c == upperC
+                    colour = White
+                else
+                    colour = Black
+                end
+                place_piece!(pieces,piece_list,FENdict[upperC]+colour,i)
                 i+=1
-            elseif c == 'Q'
-                WQueen = setone(WQueen,i)
-                i+=1
-            elseif c == 'P'
-                WPawn = setone(WPawn,i)
-                i+=1
-            elseif c == 'B'
-                WBishop = setone(WBishop,i)
-                i+=1
-            elseif c == 'N'
-                WKnight = setone(WKnight,i)
-                i+=1
-            elseif c == 'R'
-                WRook = setone(WRook,i)
-                i+=1
-
-            elseif c == 'k'
-                BKing = setone(BKing,i)
-                i+=1
-            elseif c == 'q'
-                BQueen = setone(BQueen,i)
-                i+=1
-            elseif c == 'p'
-                BPawn = setone(BPawn,i)
-                i+=1
-            elseif c == 'b'
-                BBishop = setone(BBishop,i)
-                i+=1
-            elseif c == 'n'
-                BKnight = setone(BKnight,i)
-                i+=1
-            elseif c == 'r'
-                BRook = setone(BRook,i)
-                i+=1
-            
             elseif isnumeric(c)
                 i+=parse(Int,c)
             end
@@ -183,8 +151,7 @@ function Boardstate(FEN)
                      Vector{UInt64}([Castling]),Vector{UInt8}([0]),
                      Vector{UInt64}([EnPassant]),Vector{UInt8}([0]))
 
-    Boardstate([WKing, WQueen, WPawn, WBishop, WKnight, WRook, 
-                BKing, BQueen, BPawn, BBishop, BKnight, BRook],
+    Boardstate(pieces,#piece_list,
     ColourIndex,Neutral(),MoveHistory,data)
 end
 
@@ -236,7 +203,7 @@ function GUIposition(board::Boardstate)
     return position
 end
 
-"returns a number between 0 and 63 to indicate where we are on a chessboard"
+"returns a list of numbers between 0 and 63 to indicate positions on a chessboard"
 function identify_locations(pieceBB::UInt64)::Vector{UInt8}
     locations = Vector{UInt8}()
     for i in UInt8(0):UInt8(63)
@@ -357,9 +324,9 @@ function generate_moves(board::Boardstate)::Vector{Move}
 
     for (pieceID,pieceBB) in enumerate(ally_pieces(board))
         if pieceBB > 0
-            piece_locations = identify_locations(pieceBB)
-
-            for loc in piece_locations
+            #pc_list = board.piece_list[pieceID+board.ColourIndex]
+            pc_list = identify_locations(pieceBB)
+            for loc in pc_list
                 #king is first piece looked at, need checking attackers for move generation
                 if pieceID == King
                     checks = attackable(board,loc)
@@ -381,27 +348,36 @@ function generate_moves(board::Boardstate)::Vector{Move}
     return movelist
 end
 
-"utilises setzero and setone to move single piece"
-function move_piece!(pieces::Vector{UInt64},CIndex,pieceID,from,to)
-    pieces[CIndex+pieceID] = setone(setzero(pieces[CIndex+pieceID],from),to)
+"search for a value in a vector and remove it"
+function remove!(a, item)
+    deleteat!(a, findall(x->x==item, a))
 end
 
-"utilises setone to remove a piece from a position"
-function destroy_piece!(pieces::Vector{UInt64},CIndex,pieceID,pos)
-    pieces[CIndex+pieceID] = setzero(pieces[CIndex+pieceID],pos)
+"utilises setzero to remove a piece from a position"
+function destroy_piece!(B::Boardstate,CIndex,pieceID,pos)
+    B.pieces[CIndex+pieceID] = setzero(B.pieces[CIndex+pieceID],pos)
+    #remove!(B.piece_list[CIndex+pieceID],pos)
 end
 
 "utilises setone to create a piece in a position"
-function create_piece!(pieces::Vector{UInt64},CIndex,pieceID,pos)
-    pieces[CIndex+pieceID] = setone(pieces[CIndex+pieceID],pos)
+function create_piece!(B::Boardstate,CIndex,pieceID,pos)
+    B.pieces[CIndex+pieceID] = setone(B.pieces[CIndex+pieceID],pos)
+    #push!(B.piece_list[CIndex+pieceID],pos)
+end
+
+"utilises create and destroy to move single piece"
+function move_piece!(B::Boardstate,CIndex,pieceID,from,to)
+    B.pieces[CIndex+pieceID] = setzero(B.pieces[CIndex+pieceID],from)
+    B.pieces[CIndex+pieceID] = setone(B.pieces[CIndex+pieceID],to)
+    #replace!(B.piece_list[CIndex+pieceID],from=>to)
 end
 
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist"
 function make_move!(move::Move,board::Boardstate)
-    move_piece!(board.pieces,board.ColourIndex,move.piece_type,move.from,move.to)
+    move_piece!(board,board.ColourIndex,move.piece_type,move.from,move.to)
 
     if move.capture_type > 0
-        destroy_piece!(board.pieces,Opposite(board.ColourIndex),move.capture_type,move.to)
+        destroy_piece!(board,Opposite(board.ColourIndex),move.capture_type,move.to)
         push!(board.Data.Halfmoves,0)
     else
         board.Data.Halfmoves[end] += 1
@@ -414,10 +390,10 @@ end
 function unmake_move!(board::Boardstate)
     if length(board.MoveHist) > 0
         move = board.MoveHist[end]
-        move_piece!(board.pieces,Opposite(board.ColourIndex),move.piece_type,move.to,move.from)
+        move_piece!(board,Opposite(board.ColourIndex),move.piece_type,move.to,move.from)
 
         if move.capture_type > 0
-            create_piece!(board.pieces,board.ColourIndex,move.capture_type,move.to)
+            create_piece!(board,board.ColourIndex,move.capture_type,move.to)
         end
 
         if board.Data.Halfmoves[end] > 0 
