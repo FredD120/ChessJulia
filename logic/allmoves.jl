@@ -3,6 +3,9 @@ function to_UInt64(val)
     return UInt64(1) << val
 end
 
+"sets a bit in a bitboard"
+setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
+
 "convert chessboard x y to 1D array"
 board_coords(x) =  x[1]*8 + x[2]
 
@@ -71,7 +74,64 @@ function test_king()
     num2 = UInt64(1) << 1 | UInt64(1) << 8 | UInt64(1) << 9
     @assert num1 == num2
 end
-test_king()
-save_moves(king,king)
+#test_king()
+#save_moves(king,king)
 
 
+### MAGIC BITBOARDS ###
+
+function set_location(rank,file,BB)
+    location = Int(rank*8 + file)
+    return setone(BB,location)
+end
+
+function rook_move_BBs(pos = 0)
+    file = pos % 8
+    rank = (pos - file)/8 
+
+    BB_lookup = Vector{UInt64}()
+    for i in UInt16(0):UInt16(2^12-1)
+        println(i)
+        BB = UInt64(0)
+        counter = 0
+
+        #move right
+        cur_file = file
+        fill_mode = false
+        while (cur_file <= 6) & (fill_mode == false)
+            cur_file += 1
+            BB = set_location(rank,cur_file,BB)
+            if i & (UInt16(0) << counter) == 0  #no blocker
+                if cur_file == 6
+                    BB = set_location(rank,cur_file+1,BB)
+                end
+                counter += 1
+            else
+                fill_mode = true
+                counter += 7 - cur_file
+            end
+        end
+
+        #move down
+        cur_rank = rank
+        fill_mode = false
+        while (cur_rank <= 6) & (fill_mode == false)
+            cur_rank += 1
+            BB = set_location(cur_rank,file,BB)
+            if i & (UInt16(0) << counter) == 0  #no blocker
+                if cur_rank == 6
+                    BB = set_location(cur_rank+1,file,BB)
+                end
+                counter += 1
+            else
+                fill_mode = true
+                counter += 7 - cur_rank
+            end
+        end
+
+        push!(BB_lookup,BB)
+    end
+    return BB_lookup
+end
+
+println(rook_move_BBs())
