@@ -65,6 +65,7 @@ mutable struct BoardData
     CastleCount::Vector{UInt8}
     EnPassant::Vector{UInt64}
     EPCount::Vector{UInt8}
+    ZHashHist::Vector{UInt64}
 end
 
 mutable struct Boardstate
@@ -214,11 +215,12 @@ function Boardstate(FEN)
         end
     end
 
+    Zobrist = generate_hash(pieces,Whitesmove(ColourIndex),Castling,EnPassant)
     data = BoardData(Vector{UInt8}([Halfmoves]),
                      Vector{UInt64}([Castling]),Vector{UInt8}([0]),
-                     Vector{UInt64}([EnPassant]),Vector{UInt8}([0]))
+                     Vector{UInt64}([EnPassant]),Vector{UInt8}([0]),
+                     Vector{UInt64}([Zobrist]))
 
-    Zobrist = generate_hash(pieces,Whitesmove(ColourIndex),Castling,EnPassant)
     Boardstate(pieces,ColourIndex,Neutral(),Zobrist,MoveHistory,data)
 end
 
@@ -355,8 +357,8 @@ const get_piecemoves = [get_kingmoves,get_queenmoves,get_rookmoves,get_bishopmov
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate)::Vector{Move}
     movelist = Vector{Move}()
-    #implement 50 move rule
-    if board.Data.Halfmoves[end] >= 100
+    #implement 50 move rule and 3 position repetition
+    if (board.Data.Halfmoves[end] >= 100) | (count(i->(i==board.ZHash),board.Data.ZHashHist) >= 3)
         board.State = Draw()
     else
     enemy_pcs = player_pieces(enemy_pieces(board))
@@ -389,43 +391,52 @@ function generate_moves(board::Boardstate)::Vector{Move}
 end
 
 "utilises setzero to remove a piece from a position"
-function destroy_piece!(B::Boardstate,CIndex,pieceID,pos)
-    B.pieces[CIndex+pieceID] = setzero(B.pieces[CIndex+pieceID],pos)
+function destroy_piece!(B::Boardstate,CpieceID,pos)
+    B.pieces[CpieceID] = setzero(B.pieces[CpieceID],pos)
+    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+pos+1]
 end
 
 "utilises setone to create a piece in a position"
-function create_piece!(B::Boardstate,CIndex,pieceID,pos)
-    B.pieces[CIndex+pieceID] = setone(B.pieces[CIndex+pieceID],pos)
+function create_piece!(B::Boardstate,CpieceID,pos)
+    B.pieces[CpieceID] = setone(B.pieces[CpieceID],pos)
+    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+pos+1]
 end
 
 "utilises create and destroy to move single piece"
-function move_piece!(B::Boardstate,CIndex,pieceID,from,to)
-    B.pieces[CIndex+pieceID] = setzero(B.pieces[CIndex+pieceID],from)
-    B.pieces[CIndex+pieceID] = setone(B.pieces[CIndex+pieceID],to)
+function move_piece!(B::Boardstate,CpieceID,from,to)
+    destroy_piece!(B,CpieceID,from)
+    create_piece!(B,CpieceID,to)
+end
+
+"switch to opposite colour and update hash key"
+function swap_player!(board)
+    board.ColourIndex = Opposite(board.ColourIndex)
+    board.ZHash ⊻= ZobristKeys[end]
 end
 
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist"
 function make_move!(move::Move,board::Boardstate)
-    move_piece!(board,board.ColourIndex,move.piece_type,move.from,move.to)
+    move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
 
     if move.capture_type > 0
-        destroy_piece!(board,Opposite(board.ColourIndex),move.capture_type,move.to)
+        destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
         push!(board.Data.Halfmoves,0)
     else
         board.Data.Halfmoves[end] += 1
     end
-    board.ColourIndex = Opposite(board.ColourIndex)
+    swap_player!(board)
     push!(board.MoveHist,move)
+    push!(board.Data.ZHashHist,board.ZHash)
 end
 
 "unmakes last move on MoveHist stack. currently doesn't restore halfmoves"
 function unmake_move!(board::Boardstate)
     if length(board.MoveHist) > 0
         move = board.MoveHist[end]
-        move_piece!(board,Opposite(board.ColourIndex),move.piece_type,move.to,move.from)
+        move_piece!(board,Opposite(board.ColourIndex)+move.piece_type,move.to,move.from)
 
         if move.capture_type > 0
-            create_piece!(board,board.ColourIndex,move.capture_type,move.to)
+            create_piece!(board,board.ColourIndex+move.capture_type,move.to)
         end
 
         if board.Data.Halfmoves[end] > 0 
@@ -434,8 +445,9 @@ function unmake_move!(board::Boardstate)
             pop!(board.Data.Halfmoves)
         end
 
-        board.ColourIndex = Opposite(board.ColourIndex)
+        swap_player!(board)
         pop!(board.MoveHist)
+        pop!(board.Data.ZHashHist)
     else
         println("Failed to unmake move: No move history")
     end

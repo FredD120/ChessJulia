@@ -42,18 +42,18 @@ function load_pieces(renderer)
     filepath = "$(pwd())/ChessPieces/"
     texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
 
-    texture_vec[1] = get_texture(renderer,filepath,"WhiteKing")
-    texture_vec[2] = get_texture(renderer,filepath,"WhiteQueen")
-    texture_vec[3] = get_texture(renderer,filepath,"WhitePawn")
-    texture_vec[4] = get_texture(renderer,filepath,"WhiteBishop")
-    texture_vec[5] = get_texture(renderer,filepath,"WhiteKnight")
-    texture_vec[6] = get_texture(renderer,filepath,"WhiteRook")
-    texture_vec[7] = get_texture(renderer,filepath,"BlackKing")
-    texture_vec[8] = get_texture(renderer,filepath,"BlackQueen")
-    texture_vec[9] = get_texture(renderer,filepath,"BlackPawn")
-    texture_vec[10] = get_texture(renderer,filepath,"BlackBishop")
-    texture_vec[11] = get_texture(renderer,filepath,"BlackKnight")
-    texture_vec[12] = get_texture(renderer,filepath,"BlackRook")
+    texture_vec[logic.King+logic.White] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[logic.Queen+logic.White] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[logic.Pawn+logic.White] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[logic.Bishop+logic.White] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[logic.Knight+logic.White] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[logic.Rook+logic.White] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[logic.King+logic.Black] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[logic.Queen+logic.Black] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[logic.Pawn+logic.Black] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[logic.Bishop+logic.Black] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[logic.Knight+logic.Black] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[logic.Rook+logic.Black] = get_texture(renderer,filepath,"BlackRook")
 
     return texture_vec
 end
@@ -254,9 +254,10 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #test knights and kings
-    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)

@@ -1,7 +1,7 @@
 using logic
 using BenchmarkTools
 
-const expensive = false
+const expensive = true
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -91,7 +91,6 @@ test_identifylocs()
 
 function test_Zobrist()
     board = Boardstate(FEN)
-    println(board.ZHash)
     @assert board.ZHash == 3988342487599293876
 
     moves = generate_moves(board)
@@ -100,7 +99,11 @@ function test_Zobrist()
         make_move!(move,board)
        end
     end
-    println(board.ZHash)
+    @assert board.Data.ZHashHist[1] == 3988342487599293876
+
+    newFEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    newboard = Boardstate(newFEN)
+    @assert board.ZHash == newboard.ZHash
 end
 test_Zobrist()
 
@@ -347,6 +350,43 @@ function test_unmake()
 end
 test_unmake()
 
+function test_repetition()
+    basicFEN = "K7/8/8/8/8/8/8/7k w KQkq - 0 1"
+    board = Boardstate(basicFEN)
+
+    for i in 1:8
+        moves = generate_moves(board)
+        for m in moves
+            pos = -1
+            if i%2==1
+                pos = 0
+            else
+                pos = 63
+            end
+
+            if (m.from == pos) | (m.to == pos)
+                make_move!(m,board)
+                break
+            end
+        end
+    end
+    #need to generate moves to figure out if it is a draw
+    generate_moves(board)
+    @assert board.State == Draw()
+end
+test_repetition()
+
+function test_UCI()
+    str1 = logic.UCIpos(0)
+    str2 = logic.UCIpos(63)
+    @assert (str1 == "a8") & (str2 == "h1")
+
+    move = Move(1,2,54,0)
+    mvstr = UCImove(move)
+    @assert mvstr == "c8g2"
+end
+test_UCI()
+
 function test_perft()
     basicFEN = "K7/8/8/8/8/8/8/7k w KQkq - 0 1"
     board = Boardstate(basicFEN)
@@ -366,16 +406,6 @@ function test_speed()
     Δt = time() - t
     return leaves,Δt
 end
-function test_UCI()
-    str1 = logic.UCIpos(0)
-    str2 = logic.UCIpos(63)
-    @assert (str1 == "a8") & (str2 == "h1")
-
-    move = Move(1,2,54,0)
-    mvstr = UCImove(move)
-    @assert mvstr == "c8g2"
-end
-test_UCI()
 
 function benchmarkspeed(leafcount)
     FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1"
@@ -393,7 +423,7 @@ if expensive
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
     #benchmarkspeed(leaves)
-    #best = 1.256e7
+    #best = 1.235e7
 end
 
 println("All tests passed")
