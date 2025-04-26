@@ -1,7 +1,7 @@
 using logic
 using BenchmarkTools
 
-const expensive = true
+const expensive = false
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -23,7 +23,7 @@ test_setters()
 
 function test_boardinit()
     board = Boardstate(FEN)
-    @assert Whitesmove(board) == true
+    @assert Whitesmove(board.ColourIndex) == true
     @assert board.Data.EnPassant[end] == UInt64(0)
     @assert logic.ally_pieces(board)[3] != UInt64(0)
     @assert logic.enemy_pieces(board)[3] != UInt64(0)
@@ -88,6 +88,21 @@ function test_identifylocs()
     @assert locs[1] * locs[2] == 150
 end
 test_identifylocs()
+
+function test_Zobrist()
+    board = Boardstate(FEN)
+    println(board.ZHash)
+    @assert board.ZHash == 3988342487599293876
+
+    moves = generate_moves(board)
+    for move in moves
+       if (move.from == 57) & (move.to == 40)
+        make_move!(move,board)
+       end
+    end
+    println(board.ZHash)
+end
+test_Zobrist()
 
 function test_movfromloc()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
@@ -156,7 +171,7 @@ function test_makemove()
         end
     end
 
-    @assert Whitesmove(board) == false
+    @assert Whitesmove(board.ColourIndex) == false
     @assert board.Data.Halfmoves[end] == UInt8(1)
     @assert logic.enemy_pieces(board)[1] == UInt64(2)
 
@@ -178,7 +193,7 @@ function test_makemove()
     basicFEN = "1n6/K7/8/8/8/8/8/8 b KQkq - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
-    @assert Whitesmove(board) == false
+    @assert Whitesmove(board.ColourIndex) == false
     @assert length(moves) == 3
 
     for m in moves
@@ -201,7 +216,7 @@ function test_makemove()
             make_move!(m,board)
         end
     end
-    @assert Whitesmove(board) == false
+    @assert Whitesmove(board.ColourIndex) == false
     @assert sum(logic.ally_pieces(board)) == 0
 
     GUI = GUIposition(board)
@@ -295,7 +310,7 @@ function test_unmake()
     end
     unmake_move!(board)
 
-    @assert Whitesmove(board) == true
+    @assert Whitesmove(board.ColourIndex) == true
     @assert logic.ally_pieces(board)[1] == UInt64(1)
     @assert logic.enemy_pieces(board)[5] == UInt64(2)
 
@@ -325,7 +340,7 @@ function test_unmake()
     unmake_move!(board)
     unmake_move!(board)
 
-    @assert Whitesmove(board) == true
+    @assert Whitesmove(board.ColourIndex) == true
     @assert logic.ally_pieces(board)[1] == UInt64(1)
     @assert logic.enemy_pieces(board)[5] == UInt64(2)
     @assert length(board.Data.Halfmoves) == 1
@@ -377,7 +392,7 @@ if expensive
     leaves,Δt = test_speed()
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
-    benchmarkspeed(leaves)
+    #benchmarkspeed(leaves)
     #best = 1.256e7
 end
 

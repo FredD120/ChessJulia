@@ -4,16 +4,19 @@ export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft
 
 using Random
+rng = Xoshiro(2955)
 
 const White = UInt8(0)
 const Black = UInt8(6)
 const NULL_PIECE = UInt8(0)
 const King = UInt8(1)
 const Queen = UInt8(2)
-const Pawn = UInt8(3)
+const Rook = UInt8(3)
 const Bishop = UInt8(4)
 const Knight = UInt8(5)
-const Rook = UInt8(6)
+const Pawn = UInt8(6)
+
+const ZobristKeys = rand(rng,UInt64,12*64)
 
 struct Move
     piece_type::UInt8
@@ -68,13 +71,80 @@ mutable struct Boardstate
     pieces::Vector{UInt64}
     ColourIndex::UInt8
     State::GameState
+    ZHash::UInt64
     MoveHist::Vector{Move}
     Data::BoardData
 end
 
-"helper function when constructing a boardstate"
+"Helper function to determine whose move it is"
+Whitesmove(ColourIndex::UInt8) = ColourIndex == 0 ? true : false
+
+"Helper function to return opposite colour index"
+Opposite(ColourIndex) = (ColourIndex+6)%12
+
+"returns a list of numbers between 0 and 63 to indicate positions on a chessboard"
+function identify_locations(pieceBB::UInt64)::Vector{UInt8}
+    locations = Vector{UInt8}()
+    temp_BB = pieceBB
+    while temp_BB != 0
+        loc = trailing_zeros(temp_BB) #find 0-indexed location of least significant bit in BB
+        push!(locations,loc)
+        temp_BB &= temp_BB - 1        #trick to remove least significant bit
+    end
+    return locations
+end
+
+"loop through a list of piece BBs for one colour and return ID of enemy piece at a location"
+function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UInt8
+    ID = NULL_PIECE
+    for (pieceID,pieceBB) in enumerate(one_side_BBs)
+        if pieceBB & (UInt64(1) << location) != 0
+            ID = pieceID
+            break
+        end
+    end
+    return ID
+end
+
+"Helper function when constructing a boardstate"
 function place_piece!(pieces::Vector{UInt64},pieceID,pos)
     pieces[pieceID] = setone(pieces[pieceID],pos)
+end
+
+"generate Zobrist hash of a boardstate"
+function generate_hash(pieces,Whitesmove,castling,enpassant)
+    ZHash = UInt64(0)
+    for (pieceID,pieceBB) in enumerate(pieces)
+        for loc in identify_locations(pieceBB)
+            ZHash ⊻= ZobristKeys[12*(pieceID-1)+loc+1]
+        end
+    end
+
+    #the rest of this data is packed in using the fact that neither
+    #black or white pawns will exist on first or last rank
+    for EP in identify_locations(enpassant)
+        file = EP % 8
+        #use first rank of black pawns
+        ZHash ⊻= ZobristKeys[12*(11)+file+1]
+    end
+
+    #use last rank of black pawns (not very elegant)
+    for C in identify_locations(castling)
+        if C == 2
+            ZHash ⊻= ZobristKeys[end - 1]
+        elseif C == 6
+            ZHash ⊻= ZobristKeys[end - 2]
+        elseif C == 58
+            ZHash ⊻= ZobristKeys[end - 3]
+        elseif C == 62
+            ZHash ⊻= ZobristKeys[end - 4]
+        end
+    end
+
+    if !Whitesmove
+        ZHash ⊻= ZobristKeys[end]
+    end
+    return ZHash
 end
 
 "Initialise a boardstate from a FEN string"
@@ -87,7 +157,7 @@ function Boardstate(FEN)
     MoveHistory = Vector{Move}()
     rank = nothing
     file = nothing
-    FENdict = Dict('K'=>King,'Q'=>Queen,'P'=>Pawn,'B'=>Bishop,'N'=>Knight,'R'=>Rook)
+    FENdict = Dict('K'=>King,'Q'=>Queen,'R'=>Rook,'B'=>Bishop,'N'=>Knight,'P'=>Pawn)
 
     #Keep track of where we are on chessboard
     i = UInt32(0)         
@@ -148,26 +218,23 @@ function Boardstate(FEN)
                      Vector{UInt64}([Castling]),Vector{UInt8}([0]),
                      Vector{UInt64}([EnPassant]),Vector{UInt8}([0]))
 
-    Boardstate(pieces,ColourIndex,Neutral(),MoveHistory,data)
+    Zobrist = generate_hash(pieces,Whitesmove(ColourIndex),Castling,EnPassant)
+    Boardstate(pieces,ColourIndex,Neutral(),Zobrist,MoveHistory,data)
 end
 
+"convert a position from number 0-63 to rank/file notation"
 function UCIpos(pos)
     file = pos % 8
     rank = 8 - (pos - file)/8 
     return ('a'+file)*string(Int(rank))
 end
 
+"convert a move to UCI notation"
 function UCImove(move::Move)
     from = UCIpos(move.from)
     to = UCIpos(move.to)
     return from*to
 end
-
-"Helper function to determine whose move it is"
-Whitesmove(b::Boardstate) = b.ColourIndex == 0 ? true : false
-
-"Helper function to return opposite colour index"
-Opposite(ColourIndex) = (ColourIndex+6)%12
 
 "Returns a single bitboard representing the positions of an array of pieces"
 function player_pieces(piece_vec::VecOrMat{UInt64})
@@ -178,9 +245,10 @@ function player_pieces(piece_vec::VecOrMat{UInt64})
     return BB
 end
 
-"Helper functions for ease of coding"
+"Helper function to obtain vector of ally bitboards"
 ally_pieces(b::Boardstate) = b.pieces[b.ColourIndex+1:b.ColourIndex+6]
 
+"Helper function to obtain vector of enemy bitboards"
 function enemy_pieces(b::Boardstate) 
     enemy_ind = Opposite(b.ColourIndex)
     return b.pieces[enemy_ind+1:enemy_ind+6]
@@ -197,30 +265,6 @@ function GUIposition(board::Boardstate)
         end
     end
     return position
-end
-
-"returns a list of numbers between 0 and 63 to indicate positions on a chessboard"
-function identify_locations(pieceBB::UInt64)::Vector{UInt8}
-    locations = Vector{UInt8}()
-    temp_BB = pieceBB
-    while temp_BB != 0
-        loc = trailing_zeros(temp_BB) #find 0-indexed location of least significant bit in BB
-        push!(locations,loc)
-        temp_BB &= temp_BB - 1        #trick to remove least significant bit
-    end
-    return locations
-end
-
-"loop through a list of piece BBs for one colour and return ID of enemy piece at a location"
-function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UInt8
-    ID = NULL_PIECE
-    for (pieceID,pieceBB) in enumerate(one_side_BBs)
-        if pieceBB & (UInt64(1) << location) != 0
-            ID = pieceID
-            break
-        end
-    end
-    return ID
 end
 
 "checks enemy pieces to see if any are attacking the current square, returns BB of attackers"
@@ -292,11 +336,6 @@ function get_queenmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_
     get_bishopmoves(location,board,enemy_pcs,all_pcs,checks)]
 end
 
-"not yet implemented"
-function get_pawnmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
-    return []
-end
-
 "returns attacks and quiet moves by a knight"
 function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
     poss_moves = moveset.knight[location+1]
@@ -306,7 +345,12 @@ function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all
     moves_from_location(UInt8(5),board,quiets,location,checks,false)]
 end
 
-const get_piecemoves = [get_kingmoves,get_queenmoves,get_pawnmoves,get_bishopmoves,get_knightmoves,get_rookmoves]
+"not yet implemented"
+function get_pawnmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+    return []
+end
+
+const get_piecemoves = [get_kingmoves,get_queenmoves,get_rookmoves,get_bishopmoves,get_knightmoves,get_pawnmoves]
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate)::Vector{Move}
@@ -342,11 +386,6 @@ function generate_moves(board::Boardstate)::Vector{Move}
     end
     end
     return movelist
-end
-
-"search for a value in a vector and remove it"
-function remove!(a, item)
-    deleteat!(a, findall(x->x==item, a))
 end
 
 "utilises setzero to remove a piece from a position"
