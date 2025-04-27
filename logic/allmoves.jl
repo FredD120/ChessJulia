@@ -3,6 +3,13 @@ function to_UInt64(val)
     return UInt64(1) << val
 end
 
+"convert a position from number 0-63 to rank/file notation"
+function UCIpos(pos)
+    file = pos % 8
+    rank = 8 - (pos - file)/8 
+    return ('a'+file)*string(Int(rank))
+end
+
 "sets a bit in a bitboard"
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
@@ -86,10 +93,10 @@ function set_location(rank,file,BB)
 end
 
 function generate_blocker_lengths(rank,file)
-    Lu = max(rank-1,0)
-    Ld = max(6-rank,0)
-    Ll = max(file-1,0)
-    Lr = max(6-file,0)
+    Lu = Int(max(rank-1,0))
+    Ld = Int(max(6-rank,0))
+    Ll = Int(max(file-1,0))
+    Lr = Int(max(6-file,0))
     return Lu,Ld,Ll,Lr
 end
 
@@ -99,32 +106,123 @@ function Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
     left = zeros(Ll)
     right = zeros(Lr)
 
-    i=0
+    i=1
     while i <= Lu
-        if INT & (UInt(1) << i) != 0
-            up[i+1] = 1
+        if INT & (UInt(1) << (i-1)) != 0
+            up[i] = 1
         end
         i+=1
     end
     while i <= Lu+Ll
-        if INT & (UInt(1) << i) != 0
-            left[i+1-Lu] = 1
+        if INT & (UInt(1) << (i-1)) != 0
+            left[i-Lu] = 1
         end
         i+=1
     end
     while i <= Lu + Ll + Lr
-        if INT & (UInt(1) << i) != 0
-            right[i+1-Lu-Ll] = 1
+        if INT & (UInt(1) << (i-1)) != 0
+            right[i-Lu-Ll] = 1
         end
         i+=1
     end
     while i <= Lu + Ll + Lr + Ld
-        if INT & (UInt(1) << i) != 0
-            down[i+1-Lu-Ll-Lr] = 1
+        if INT & (UInt(1) << (i-1)) != 0
+            down[i-Lu-Ll-Lr] = 1
         end
         i+=1
     end
-    return up,left,right,down
+    return up,down,left,right
+end
+
+function get_key(up,down,left,right,rank,file)
+    KEY = UInt64(0)
+
+    for (index,is_piece) in enumerate(up)
+        cur_rank = rank - index
+        if is_piece > 0
+            KEY = set_location(cur_rank,file,KEY)
+        end
+    end
+    for (index,is_piece) in enumerate(down)
+        cur_rank = rank + index
+        if is_piece > 0
+            KEY = set_location(cur_rank,file,KEY)
+        end
+    end
+    for (index,is_piece) in enumerate(left)
+        cur_file = file - index
+        if is_piece > 0
+            KEY = set_location(rank,cur_file,KEY)
+        end
+    end
+    for (index,is_piece) in enumerate(right)
+        cur_file = file + index
+        if is_piece > 0
+            KEY = set_location(rank,cur_file,KEY)
+        end
+    end
+    return KEY
+end
+
+function get_rook_moves(up,down,left,right,rank,file)
+    BB = UInt64(0)
+
+    fill = false
+    for (index,is_piece) in enumerate(up)
+        cur_rank = rank - index
+        if fill == false
+            BB = set_location(cur_rank,file,BB)
+            if index == length(up)
+                BB = set_location(cur_rank-1,file,BB) 
+            end
+        end
+        if is_piece > 0
+            fill = true
+        end
+    end
+
+    fill = false
+    for (index,is_piece) in enumerate(down)
+        cur_rank = rank + index
+        if fill == false
+            BB = set_location(cur_rank,file,BB)
+            if index == length(down)
+                BB = set_location(cur_rank+1,file,BB) 
+            end
+        end
+        if is_piece > 0
+            fill = true
+        end
+    end
+
+    fill = false
+    for (index,is_piece) in enumerate(left)
+        cur_file = file - index
+        if fill == false
+            BB = set_location(rank,cur_file,BB)
+            if index == length(left)
+                BB = set_location(rank,cur_file-1,BB) 
+            end
+        end
+        if is_piece > 0
+            fill = true
+        end
+    end
+
+    fill = false
+    for (index,is_piece) in enumerate(right)
+        cur_file = file + index
+        if fill == false
+            BB = set_location(rank,cur_file,BB)
+            if index == length(right)
+                BB = set_location(rank,cur_file+1,BB) 
+            end
+        end
+        if is_piece > 0
+            fill = true
+        end
+    end
+    return BB
 end
 
 function rook_move_BBs(pos = 0)
@@ -132,57 +230,29 @@ function rook_move_BBs(pos = 0)
     rank = (pos - file)/8 
 
     Lu,Ld,Ll,Lr = generate_blocker_lengths(rank,file)
-    up,down,left,right = Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
-
-    println(up)
-    println(down)
-    println(left)
-    println(right)
-    #=
     BB_lookup = Dict{UInt64,UInt64}()
-    for i in UInt16(0):UInt16(2^12-1)
-        println(i)
-        BB = UInt64(0)
-        counter = 0
 
-        #move right
-        cur_file = file
-        fill_mode = false
-        while (cur_file <= 6) & (fill_mode == false)
-            cur_file += 1
-            BB = set_location(rank,cur_file,BB)
-            if i & (UInt16(0) << counter) == 0  #no blocker
-                if cur_file == 6
-                    BB = set_location(rank,cur_file+1,BB)
-                end
-                counter += 1
-            else
-                fill_mode = true
-                counter += 7 - cur_file
-            end
-        end
+    #get mask to extract keys
+    sq_mask = get_key(ones(Lu),ones(Ld),ones(Ll),ones(Lr),rank,file)
 
-        #move down
-        cur_rank = rank
-        fill_mode = false
-        while (cur_rank <= 6) & (fill_mode == false)
-            cur_rank += 1
-            BB = set_location(cur_rank,file,BB)
-            if i & (UInt16(0) << counter) == 0  #no blocker
-                if cur_rank == 6
-                    BB = set_location(cur_rank+1,file,BB)
-                end
-                counter += 1
-            else
-                fill_mode = true
-                counter += 7 - cur_rank
-            end
-        end
+    for INT in UInt16(0):UInt16(2^(Lu+Ld+Ll+Lr)-1)
+        up,down,left,right = Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
+        BBKey = get_key(up,down,left,right,rank,file)
+        BBValue = get_rook_moves(up,down,left,right,rank,file)
 
-        push!(BB_lookup,BB)
+        BB_lookup[BBKey] = BBValue
     end
-    return BB_lookup
-    =#
+    return BB_lookup,sq_mask
 end
 
-rook_move_BBs()
+function all_Rook_moves()
+    sq_masks = Vector{UInt64}()
+    for pos in 0:63
+        dict,mask = rook_move_BBs(pos)
+        filename = "Rook_$(UCIpos(pos))"
+        save_data(dict,"$(pwd())/logic/move_BBs/RookMoves/$(filename).txt")
+        push!(sq_masks,mask)
+    end
+    save_data(sq_masks,"$(pwd())/logic/move_BBs/RookMoves/RookMasks.txt")
+end
+all_Rook_moves()
