@@ -85,11 +85,28 @@ function set_location(rank,file,BB)
     return setone(BB,location)
 end
 
+function generate_blocker_lengths(rank,file)
+    Lu = max(rank-1,0)
+    Ld = max(6-rank,0)
+    Ll = max(file-1,0)
+    Lr = max(6-file,0)
+    return Lu,Ld,Ll,Lr
+end
+
+function Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
+    up = zeros(Lu)
+    down = zeros(Ld)
+    left = zeros(Ll)
+    right = zeros(Lr)
+end
+
 function rook_move_BBs(pos = 0)
     file = pos % 8
     rank = (pos - file)/8 
 
-    BB_lookup = Vector{UInt64}()
+    Lu,Ld,Ll,Lr = generate_blocker_lengths(rank,file)
+
+    BB_lookup = Dict{UInt64,UInt64}()
     for i in UInt16(0):UInt16(2^12-1)
         println(i)
         BB = UInt64(0)
