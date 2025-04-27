@@ -249,7 +249,7 @@ function all_Rook_moves()
     sq_masks = Vector{UInt64}()
     for pos in 0:63
         dict,mask = rook_move_BBs(pos)
-        filename = "Rook_$(UCIpos(pos))"
+        filename = "Rook_$pos"
         save_data(dict,"$(pwd())/logic/move_BBs/RookMoves/$(filename).txt")
         push!(sq_masks,mask)
     end
