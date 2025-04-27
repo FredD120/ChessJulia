@@ -98,6 +98,33 @@ function Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
     down = zeros(Ld)
     left = zeros(Ll)
     right = zeros(Lr)
+
+    i=0
+    while i <= Lu
+        if INT & (UInt(1) << i) != 0
+            up[i+1] = 1
+        end
+        i+=1
+    end
+    while i <= Lu+Ll
+        if INT & (UInt(1) << i) != 0
+            left[i+1-Lu] = 1
+        end
+        i+=1
+    end
+    while i <= Lu + Ll + Lr
+        if INT & (UInt(1) << i) != 0
+            right[i+1-Lu-Ll] = 1
+        end
+        i+=1
+    end
+    while i <= Lu + Ll + Lr + Ld
+        if INT & (UInt(1) << i) != 0
+            down[i+1-Lu-Ll-Lr] = 1
+        end
+        i+=1
+    end
+    return up,left,right,down
 end
 
 function rook_move_BBs(pos = 0)
@@ -105,7 +132,13 @@ function rook_move_BBs(pos = 0)
     rank = (pos - file)/8 
 
     Lu,Ld,Ll,Lr = generate_blocker_lengths(rank,file)
+    up,down,left,right = Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
 
+    println(up)
+    println(down)
+    println(left)
+    println(right)
+    #=
     BB_lookup = Dict{UInt64,UInt64}()
     for i in UInt16(0):UInt16(2^12-1)
         println(i)
@@ -149,6 +182,7 @@ function rook_move_BBs(pos = 0)
         push!(BB_lookup,BB)
     end
     return BB_lookup
+    =#
 end
 
-println(rook_move_BBs())
+rook_move_BBs()
