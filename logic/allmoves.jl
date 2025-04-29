@@ -106,7 +106,7 @@ function set_location(rank,file,BB)
     return setone(BB,location)
 end
 
-function generate_blocker_lengths(rank,file)
+function generate_rook_blocker_lengths(rank,file)
     Lu = Int(max(rank-1,0))
     Ld = Int(max(6-rank,0))
     Ll = Int(max(file-1,0))
@@ -178,72 +178,43 @@ function get_key(up,down,left,right,rank,file)
     return KEY
 end
 
-function get_rook_moves(up,down,left,right,rank,file)
+function get_sliding_moves(move_arr,pos,dirs)
     BB = UInt64(0)
 
-    fill = false
-    for (index,is_piece) in enumerate(up)
-        cur_rank = rank - index
-        if fill == false
-            BB = set_location(cur_rank,file,BB)
-            if index == length(up)
-                BB = set_location(cur_rank-1,file,BB) 
+    for (i,dir) in enumerate(dirs)
+        fill = false
+        for (index,is_piece) in enumerate(move_arr[i])
+            cur_pos = pos + dir*index
+            if fill == false
+                BB = set_location(cur_pos[1],cur_pos[2],BB)
+            end
+            if is_piece > 0
+                fill = true
             end
         end
-        if is_piece > 0
-            fill = true
-        end
-    end
-
-    fill = false
-    for (index,is_piece) in enumerate(down)
-        cur_rank = rank + index
-        if fill == false
-            BB = set_location(cur_rank,file,BB)
-            if index == length(down)
-                BB = set_location(cur_rank+1,file,BB) 
-            end
-        end
-        if is_piece > 0
-            fill = true
-        end
-    end
-
-    fill = false
-    for (index,is_piece) in enumerate(left)
-        cur_file = file - index
-        if fill == false
-            BB = set_location(rank,cur_file,BB)
-            if index == length(left)
-                BB = set_location(rank,cur_file-1,BB) 
-            end
-        end
-        if is_piece > 0
-            fill = true
-        end
-    end
-
-    fill = false
-    for (index,is_piece) in enumerate(right)
-        cur_file = file + index
-        if fill == false
-            BB = set_location(rank,cur_file,BB)
-            if index == length(right)
-                BB = set_location(rank,cur_file+1,BB) 
-            end
-        end
-        if is_piece > 0
-            fill = true
+        #deal with edge of the board, only if no blockers found so far
+        cur_pos = pos + dir*(length(move_arr[i])+1)
+        if in_grid(cur_pos,[7,7],[0,0],1) & (fill==false)
+            BB = set_location(cur_pos[1],cur_pos[2],BB)
         end
     end
     return BB
 end
 
-function rook_move_BBs(pos = 0)
+function sliding_move_BBs(pos,piece)
     file = pos % 8
     rank = (pos - file)/8 
 
-    Lu,Ld,Ll,Lr = generate_blocker_lengths(rank,file)
+    Lu,Ld,Ll,Lr = (0,0,0,0)
+    dirs = []
+    if piece == "Rook"
+        dirs = [[-1,0],[+1,0],[0,-1],[0,+1]]
+        Lu,Ld,Ll,Lr = generate_rook_blocker_lengths(rank,file)
+    elseif piece == "Bishop"
+        dirs = [[+1,+1],[-1,-1],[+1,-1],[-1,+1]]
+        println(piece)
+    end
+
     BB_lookup = Dict{UInt64,UInt64}()
 
     #get mask to extract keys
@@ -252,24 +223,26 @@ function rook_move_BBs(pos = 0)
     for INT in UInt16(0):UInt16(2^(Lu+Ld+Ll+Lr)-1)
         up,down,left,right = Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
         BBKey = get_key(up,down,left,right,rank,file)
-        BBValue = get_rook_moves(up,down,left,right,rank,file)
+
+        BBValue = get_sliding_moves([up,down,left,right],[rank,file],dirs)
 
         BB_lookup[BBKey] = BBValue
     end
     return BB_lookup,sq_mask
 end
 
-function all_Rook_moves()
-    filename = "Rook_dicts"
+function all_sliding_moves(piece)
+    filename = "$(piece)_dicts"
     sq_masks = Vector{UInt64}()
     lookups =  Vector{Dict{UInt64,UInt64}}()
     for pos in 0:63
-        dict,mask = rook_move_BBs(pos)
+        dict,mask = sliding_move_BBs(pos,piece)
         
         push!(lookups,dict)
         push!(sq_masks,mask)
     end
-    #save_data(sq_masks,"$(pwd())/logic/move_BBs/RookMoves/RookMasks.txt")
-    save_dict(lookups,"$(pwd())/logic/move_BBs/RookMoves/","$(filename).jld2")
+    #save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Masks.txt")
+    save_dict(lookups,"$(pwd())/logic/move_BBs/","$(filename).jld2")
 end
-all_Rook_moves()
+all_sliding_moves("Rook")
+

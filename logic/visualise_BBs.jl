@@ -3,20 +3,20 @@ using JLD2
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 
-function get_rook_dict()
-    path = "$(pwd())/logic/move_BBs/RookMoves/"
-    filename = "Rook_dicts.jld2"
+function get_rook_dict(piece)
+    path = "$(pwd())/logic/move_BBs/"
+    filename = "$(piece)_dicts.jld2"
     movedict = Vector{Dict{UInt64,UInt64}}()
     jldopen(path*filename, "r") do file
         movedict = file["filename"]
     end
 
     masks = Vector{UInt64}()
-    masks = logic.read_moves("RookMasks")
+    masks = logic.read_moves("$(piece)Masks")
     return movedict,masks
 end
 
-rook_lookup,rook_mask = get_rook_dict()
+rook_lookup,rook_mask = get_rook_dict("Rook")
 
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
