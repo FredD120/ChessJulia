@@ -1,5 +1,22 @@
+using logic
+using JLD2
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
+
+function get_rook_dict()
+    path = "$(pwd())/logic/move_BBs/RookMoves/"
+    filename = "Rook_dicts.jld2"
+    movedict = Vector{Dict{UInt64,UInt64}}()
+    jldopen(path*filename, "r") do file
+        movedict = file["filename"]
+    end
+
+    masks = Vector{UInt64}()
+    masks = logic.read_moves("RookMasks")
+    return movedict,masks
+end
+
+rook_lookup,rook_mask = get_rook_dict()
 
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
@@ -24,6 +41,36 @@ function texture!(surface,renderer)
 
     SDL_FreeSurface(surface)
     return tex
+end
+
+"retrieve texture from file"
+function get_texture(renderer,path,name)
+    surface = IMG_Load("$(path)$(name).png")
+    @assert surface != C_NULL "Error loading image: $(unsafe_string(SDL_GetError()))"
+
+    return texture!(surface,renderer)
+end
+
+"loads chess pieces from file and creates vector of pointers to textures"
+function load_pieces(renderer)
+    
+    filepath = "$(pwd())/ChessPieces/"
+    texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
+
+    texture_vec[logic.King+logic.White] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[logic.Queen+logic.White] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[logic.Pawn+logic.White] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[logic.Bishop+logic.White] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[logic.Knight+logic.White] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[logic.Rook+logic.White] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[logic.King+logic.Black] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[logic.Queen+logic.Black] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[logic.Pawn+logic.Black] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[logic.Bishop+logic.Black] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[logic.Knight+logic.Black] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[logic.Rook+logic.Black] = get_texture(renderer,filepath,"BlackRook")
+
+    return texture_vec
 end
 
 "takes in position in pixel coords returns true if square is dark colour"
@@ -94,24 +141,65 @@ function board_coords(xpos,ypos,sq_width)
     return x + y*8
 end
 
+"converts a list of positions to a bitboard"
+function array_to_BB(arr)
+    BB = UInt64(0)
+    for a in arr
+        BB |= (UInt64(1)<<a)
+    end
+    return BB
+end
+
+"lookup rook moves in dict"
+function rook_moves(board_sq,all_pieces)
+    blocker_BB = all_pieces & rook_mask[board_sq+1]
+    return rook_lookup[board_sq+1][blocker_BB]
+end
+
+"convert a bitboard to visualise in GUI"
+function get_GUI_moves(BB)
+    pos_list = logic.identify_locations(BB)
+    GUIboard = zeros(Integer,64)
+    for pos in pos_list
+        GUIboard[pos+1] = logic.Rook
+    end
+    return GUIboard
+end
+
+function remove!(a, item)
+    deleteat!(a, findall(x->x==item, a))
+end
+
 "update gui based on mouse click to indicate legal moves"
-function mouse_clicked!(mouse_pos,highlight_pieces,highlight_moves,PLACE_PIECES)
+function mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,PLACE_PIECES)
     if PLACE_PIECES
-        push!(highlight_pieces,mouse_pos)
+        if count(i->(i==mouse_pos),highlight_pieces) == 0
+            push!(highlight_pieces,mouse_pos)
+        else
+            remove!(highlight_pieces,mouse_pos)
+        end
     else
-        println("rook moves")
+        blockers = array_to_BB(highlight_pieces) 
+        move_BB = rook_moves(mouse_pos,blockers) #needs to belong to logic
+        GUIboard .= get_GUI_moves(move_BB)
+    end
+end
+
+"Takes in a position and places pieces based on ptrs to piece textures"
+function render_pieces(renderer,piece_width,position,tex_vec)
+    for (i,p) in enumerate(position)
+        if p!=0
+            x,y = pixel_coords(i-1,piece_width)
+            dest_ref = Ref(SDL_Rect(x, y, piece_width, piece_width))
+            SDL_RenderCopy(renderer, tex_vec[p], C_NULL, dest_ref)
+        end
     end
 end
 
 "display pieces and chessboard on screen. enable clicking to show and make legal moves"
-function main_loop(win,renderer,board,click_sqs,WIDTH,square_width)
-
-    rook_moves = Vector{Dict{UInt64,UInt64}}()
-    
-
+function main_loop(win,renderer,board,pieces,click_sqs,WIDTH,square_width)
     highlight_pieces = []   #visualise pseudo-pieces
-    highlight_moves = []    #visualise rook moves
-    sq_clicked = -1         #position of mouse click in board coords
+    GUIboard = zeros(Integer,64)    #visualise rook moves
     MODE = true
     try
         close = false
@@ -125,13 +213,14 @@ function main_loop(win,renderer,board,click_sqs,WIDTH,square_width)
                     break 
                 elseif evt_ty == SDL_KEYUP
                     MODE = !MODE
+                    GUIboard = zeros(Integer,64)
                 elseif evt_ty == SDL_MOUSEBUTTONUP
                     mouse_evt = getproperty(evt,:button)
                     xpos = getproperty(mouse_evt,:x)
                     ypos = getproperty(mouse_evt,:y)
                     mouse_pos = board_coords(xpos,ypos,square_width)
 
-                    mouse_clicked!(mouse_pos,highlight_pieces,highlight_moves,MODE)
+                    mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,MODE)
                 end
             end
 
@@ -142,6 +231,7 @@ function main_loop(win,renderer,board,click_sqs,WIDTH,square_width)
                 x,y = pixel_coords(pos,square_width)
                 SDL_RenderCopy(renderer,click_sqs[1],C_NULL,Ref(SDL_Rect(x,y,square_width,square_width)))
             end
+            render_pieces(renderer,square_width,GUIboard,pieces)
 
             SDL_RenderPresent(renderer)
 
@@ -161,9 +251,10 @@ function main()
     brown = [125, 62, 62, 255] 
     cream = [255, 253, 208, 255] 
     win, renderer = startup(WIDTH,WIDTH)
+    pieces = load_pieces(renderer)
     board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
     bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
-    main_loop(win,renderer,board,[bclk_sq,cclk_sq],WIDTH,sq_width)
+    main_loop(win,renderer,board,pieces,[bclk_sq,cclk_sq],WIDTH,sq_width)
 
 end
 main()

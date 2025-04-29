@@ -1,3 +1,5 @@
+using JLD2
+
 "converts a single board sqaure to a bitboard"
 function to_UInt64(val)
     return UInt64(1) << val
@@ -38,6 +40,18 @@ function save_data(data,filename)
         end
     end
 end
+
+"save sliding piece dicts to file"
+function save_dict(data,path,filename)
+    if isfile(path*filename)
+        println("error creating $(filename): file already exists")
+    else
+        jldopen(path*filename, "w") do file
+            file["filename"] = data
+        end
+    end
+end
+
 
 "scan through chess squares, generating moves of a particular piece on that square"
 function create_moves(f)
@@ -246,13 +260,16 @@ function rook_move_BBs(pos = 0)
 end
 
 function all_Rook_moves()
+    filename = "Rook_dicts"
     sq_masks = Vector{UInt64}()
+    lookups =  Vector{Dict{UInt64,UInt64}}()
     for pos in 0:63
         dict,mask = rook_move_BBs(pos)
-        filename = "Rook_$pos"
-        save_data(dict,"$(pwd())/logic/move_BBs/RookMoves/$(filename).txt")
+        
+        push!(lookups,dict)
         push!(sq_masks,mask)
     end
-    save_data(sq_masks,"$(pwd())/logic/move_BBs/RookMoves/RookMasks.txt")
+    #save_data(sq_masks,"$(pwd())/logic/move_BBs/RookMoves/RookMasks.txt")
+    save_dict(lookups,"$(pwd())/logic/move_BBs/RookMoves/","$(filename).jld2")
 end
 all_Rook_moves()

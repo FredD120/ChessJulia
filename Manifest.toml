@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.4"
 manifest_format = "2.0"
-project_hash = "f4710d194cf17dfc9a7e077d3ebfaf8f08f2a3bc"
+project_hash = "c2c299d9118d1bf4e9eb974ec277971272549793"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -102,6 +102,18 @@ git-tree-sha1 = "8476481230247b3671a98f8b3072053bb001102a"
 uuid = "1d38b3a6-207b-531b-80e8-c83f48dafa73"
 version = "1.3.4+2"
 
+[[deps.FileIO]]
+deps = ["Pkg", "Requires", "UUIDs"]
+git-tree-sha1 = "b66970a70db13f45b7e57fbda1736e1cf72174ea"
+uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+version = "1.17.0"
+
+    [deps.FileIO.extensions]
+    HTTPExt = "HTTP"
+
+    [deps.FileIO.weakdeps]
+    HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 version = "1.11.0"
@@ -188,6 +200,18 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "6b1e49820922eca7bfc862442da6e54173a075b4"
 uuid = "a51ab1cf-af8e-5615-a023-bc2c838bba6b"
 version = "68.2.0+0"
+
+[[deps.JLD2]]
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "PrecompileTools", "TranscodingStreams"]
+git-tree-sha1 = "8e071648610caa2d3a5351aba03a936a0c37ec61"
+uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+version = "0.5.13"
+
+    [deps.JLD2.extensions]
+    UnPackExt = "UnPack"
+
+    [deps.JLD2.weakdeps]
+    UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -328,6 +352,11 @@ version = "1.11.0"
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
 version = "1.11.0"
 
+[[deps.MacroTools]]
+git-tree-sha1 = "1e0228a030642014fe5cfe68c2c0a818f9e3f522"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.16"
+
 [[deps.Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
@@ -337,6 +366,10 @@ version = "1.11.0"
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.6+0"
+
+[[deps.Mmap]]
+uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+version = "1.11.0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
@@ -375,6 +408,11 @@ git-tree-sha1 = "6703a85cb3781bd5909d48730a67205f3f31a575"
 uuid = "91d4177d-7536-5919-b921-800302f37372"
 version = "1.3.3+0"
 
+[[deps.OrderedCollections]]
+git-tree-sha1 = "cc4054e898b852042d7b503313f7ad03de99c3dd"
+uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+version = "1.8.0"
+
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "efcefdf7-47ab-520b-bdef-62a2eaa19f15"
@@ -403,6 +441,12 @@ version = "1.11.0"
     [deps.Pkg.weakdeps]
     REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "5aa36f7049a63a1528fe8f7c3f2113413ffd4e1f"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.2.1"
+
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "9306f6085165d270f7e3db02af26a400d580f5c6"
@@ -430,6 +474,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Ncurses_jll"]
 git-tree-sha1 = "69684dc9c2c69f7c515097841991362cca0739ea"
 uuid = "05236dd9-4125-5232-aa7c-9ec0c9b2c25a"
 version = "8.2.1+1"
+
+[[deps.Requires]]
+deps = ["UUIDs"]
+git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "1.3.1"
 
 [[deps.SBC_jll]]
 deps = ["Libdl", "Pkg", "libsndfile_jll"]
@@ -510,6 +560,11 @@ version = "1.0.3"
 deps = ["ArgTools", "SHA"]
 uuid = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 version = "1.10.0"
+
+[[deps.TranscodingStreams]]
+git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
+uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
+version = "0.11.3"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
@@ -730,7 +785,7 @@ version = "1.4.0+0"
 
 [[deps.logic]]
 deps = ["Random"]
-path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\logic"
+path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\logic"
 uuid = "71af330d-9551-40af-bd9f-dd36b4d12b46"
 version = "0.0.7"
 
