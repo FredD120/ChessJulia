@@ -47,7 +47,7 @@ function save_dict(data,path,filename)
         println("error creating $(filename): file already exists")
     else
         jldopen(path*filename, "w") do file
-            file["filename"] = data
+            file["data"] = data
         end
     end
 end
@@ -114,6 +114,14 @@ function generate_rook_blocker_lengths(rank,file)
     return Lu,Ld,Ll,Lr
 end
 
+function generate_bishop_blocker_lengths(rank,file)
+    Lu = Int(max(min(rank-1,file-1),0))
+    Ld = Int(max(min(6-rank,6-file),0))
+    Ll = Int(max(min(6-rank,file-1),0))
+    Lr = Int(max(min(rank-1,6-file),0))
+    return Lu,Ld,Ll,Lr
+end
+
 function Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
     up = zeros(Lu)
     down = zeros(Ld)
@@ -148,31 +156,16 @@ function Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
     return up,down,left,right
 end
 
-function get_key(up,down,left,right,rank,file)
+function get_key(move_arr,pos,dirs)
     KEY = UInt64(0)
 
-    for (index,is_piece) in enumerate(up)
-        cur_rank = rank - index
-        if is_piece > 0
-            KEY = set_location(cur_rank,file,KEY)
-        end
-    end
-    for (index,is_piece) in enumerate(down)
-        cur_rank = rank + index
-        if is_piece > 0
-            KEY = set_location(cur_rank,file,KEY)
-        end
-    end
-    for (index,is_piece) in enumerate(left)
-        cur_file = file - index
-        if is_piece > 0
-            KEY = set_location(rank,cur_file,KEY)
-        end
-    end
-    for (index,is_piece) in enumerate(right)
-        cur_file = file + index
-        if is_piece > 0
-            KEY = set_location(rank,cur_file,KEY)
+    for (i,dir) in enumerate(dirs)
+        for (index,is_piece) in enumerate(move_arr[i])
+
+            cur_pos = pos + dir*index
+            if is_piece > 0
+                KEY = set_location(cur_pos[1],cur_pos[2],KEY)
+            end
         end
     end
     return KEY
@@ -211,18 +204,18 @@ function sliding_move_BBs(pos,piece)
         dirs = [[-1,0],[+1,0],[0,-1],[0,+1]]
         Lu,Ld,Ll,Lr = generate_rook_blocker_lengths(rank,file)
     elseif piece == "Bishop"
-        dirs = [[+1,+1],[-1,-1],[+1,-1],[-1,+1]]
-        println(piece)
+        dirs = [[-1,-1],[+1,+1],[+1,-1],[-1,+1]]
+        Lu,Ld,Ll,Lr = generate_bishop_blocker_lengths(rank,file)
     end
 
     BB_lookup = Dict{UInt64,UInt64}()
 
     #get mask to extract keys
-    sq_mask = get_key(ones(Lu),ones(Ld),ones(Ll),ones(Lr),rank,file)
+    sq_mask = get_key([ones(Lu),ones(Ld),ones(Ll),ones(Lr)],[rank,file],dirs)
 
     for INT in UInt16(0):UInt16(2^(Lu+Ld+Ll+Lr)-1)
         up,down,left,right = Int_to_Arrays(INT,Lu,Ld,Ll,Lr)
-        BBKey = get_key(up,down,left,right,rank,file)
+        BBKey = get_key([up,down,left,right],[rank,file],dirs)
 
         BBValue = get_sliding_moves([up,down,left,right],[rank,file],dirs)
 
@@ -241,8 +234,8 @@ function all_sliding_moves(piece)
         push!(lookups,dict)
         push!(sq_masks,mask)
     end
-    #save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Masks.txt")
+    save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Masks.txt")
     save_dict(lookups,"$(pwd())/logic/move_BBs/","$(filename).jld2")
 end
-all_sliding_moves("Rook")
+all_sliding_moves("Bishop")
 

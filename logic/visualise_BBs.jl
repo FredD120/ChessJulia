@@ -3,20 +3,24 @@ using JLD2
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 
-function get_rook_dict(piece)
+function get_dict(piece)
     path = "$(pwd())/logic/move_BBs/"
     filename = "$(piece)_dicts.jld2"
     movedict = Vector{Dict{UInt64,UInt64}}()
     jldopen(path*filename, "r") do file
-        movedict = file["filename"]
+        movedict = file["data"]
     end
-
-    masks = Vector{UInt64}()
-    masks = logic.read_moves("$(piece)Masks")
-    return movedict,masks
+    return movedict
 end
 
-rook_lookup,rook_mask = get_rook_dict("Rook")
+rook_lookup = get_dict("Rook")
+rook_mask = Vector{UInt64}()
+rook_mask = logic.read_moves("RookMasks")
+
+bishop_lookup = get_dict("Bishop")
+bishop_mask = Vector{UInt64}()
+bishop_mask = logic.read_moves("BishopMasks")
+
 
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
@@ -156,12 +160,18 @@ function rook_moves(board_sq,all_pieces)
     return rook_lookup[board_sq+1][blocker_BB]
 end
 
+"lookup bishop moves in dict"
+function bishop_moves(board_sq,all_pieces)
+    blocker_BB = all_pieces & bishop_mask[board_sq+1]
+    return bishop_lookup[board_sq+1][blocker_BB]
+end
+
 "convert a bitboard to visualise in GUI"
-function get_GUI_moves(BB)
+function get_GUI_moves(BB,pieceID)
     pos_list = logic.identify_locations(BB)
     GUIboard = zeros(Integer,64)
     for pos in pos_list
-        GUIboard[pos+1] = logic.Rook
+        GUIboard[pos+1] = pieceID
     end
     return GUIboard
 end
@@ -180,8 +190,10 @@ function mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,PLACE_PIECES)
         end
     else
         blockers = array_to_BB(highlight_pieces) 
-        move_BB = rook_moves(mouse_pos,blockers) #needs to belong to logic
-        GUIboard .= get_GUI_moves(move_BB)
+        move_BB = bishop_moves(mouse_pos,blockers) #needs to belong to logic
+
+        #move_BB = bishop_mask[mouse_pos+1]
+        GUIboard .= get_GUI_moves(move_BB,logic.Bishop)
     end
 end
 
