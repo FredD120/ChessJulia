@@ -15,11 +15,11 @@ end
 
 rook_lookup = get_dict("Rook")
 rook_mask = Vector{UInt64}()
-rook_mask = logic.read_moves("RookMasks")
+rook_mask = logic.read_txt("RookMasks")
 
 bishop_lookup = get_dict("Bishop")
 bishop_mask = Vector{UInt64}()
-bishop_mask = logic.read_moves("BishopMasks")
+bishop_mask = logic.read_txt("BishopMasks")
 
 
 "initialise window and renderer in SDL"

@@ -1,4 +1,5 @@
 using JLD2
+using logic
 
 "converts a single board sqaure to a bitboard"
 function to_UInt64(val)
@@ -224,18 +225,106 @@ function sliding_move_BBs(pos,piece)
     return BB_lookup,sq_mask
 end
 
+function magic(BB,num,N)
+    return (BB*num) >> (64-N)
+end
+
+function check_magic(dict,mag,N)
+    arr = zeros(UInt64,2^N)
+    for (key,val) in dict
+        ind = magic(key,mag,N) + 1
+        if arr[ind] == 0
+            arr[ind] = val
+        elseif arr[ind] != val
+            return false
+        end
+    end
+    println("Found:$mag")
+    return true
+end
+
+function find_magic(dict)
+    N = Int(log(2,length(dict)))
+
+    cur_max = 0
+    for (key,val) in dict
+        if key > cur_max
+            cur_max = key
+        end
+    end
+    lsb_max = trailing_zeros(cur_max)
+
+    count = 0
+    while true
+        g = rand((UInt64(1) << (64-N-lsb_max)):(UInt64(1) << (64-lsb_max)))
+        count += 1
+         
+        if check_magic(dict,g,N)  
+            return g
+        elseif count > 100_000_000
+            return UInt64(0)
+        end
+    end
+end
+
 function all_sliding_moves(piece)
     filename = "$(piece)_dicts"
     sq_masks = Vector{UInt64}()
+    magics = Vector{UInt64}()
     lookups =  Vector{Dict{UInt64,UInt64}}()
     for pos in 0:63
         dict,mask = sliding_move_BBs(pos,piece)
         
         push!(lookups,dict)
         push!(sq_masks,mask)
+
+        println("currently searching $pos")
+        push!(magics,find_magic(dict))
     end
     save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Masks.txt")
+    save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Magics.txt")
     save_dict(lookups,"$(pwd())/logic/move_BBs/","$(filename).jld2")
 end
-all_sliding_moves("Bishop")
+#all_sliding_moves("Bishop")
 
+function open_JLD2(filename)
+    path = "$(pwd())/logic/move_BBs/"
+    dicts = Vector{Dict{UInt64,UInt64}}()
+    jldopen(path*filename*".jld2", "r") do file
+        dicts = file["data"]
+    end
+    return dicts
+end
+
+function assemble_magic_array(mag,dict,N,square)
+    arr = zeros(UInt64,2^N)
+    keycount = 0
+    for (key,val) in dict
+        keycount+=1
+        ind = magic(key,mag,N) + 1
+        if arr[ind] == 0
+            arr[ind] = val
+        elseif arr[ind] != val
+            println("Error at key $keycount and square $square")
+        end
+    end
+    return arr
+end
+
+function make_magic(piece)
+    dictname = "$(piece)_dicts"
+    dict_vec = open_JLD2(dictname)
+
+    magicname = "$(piece)Magics"
+    magics = logic.read_txt(magicname)
+
+    magic_arrays = Vector{Vector{UInt64}}()
+
+    square = 0
+    for (dict,magic) in zip(dict_vec,magics)
+        square+=1
+        N = Int(log(2,length(dict)))
+        push!(magic_arrays,assemble_magic_array(magic,dict,N,square))
+    end
+end
+make_magic("Bishop")

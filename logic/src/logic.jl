@@ -26,9 +26,9 @@ struct Move
 end
 
 "take in all possible moves for a given piece from a txt file"
-function read_moves(piece_name)
+function read_txt(filename)
     moves = Vector{UInt64}(undef,64)
-    movelist = readlines("$(dirname(@__DIR__))/move_BBs/$(piece_name).txt")
+    movelist = readlines("$(dirname(@__DIR__))/move_BBs/$(filename).txt")
     for (i,m) in enumerate(movelist)
         moves[i] = parse(UInt64,m)
     end   
@@ -42,8 +42,8 @@ end
 
 "constructor for Move_BB that reads all moves from txt files"
 function Move_BB()
-    king_mvs = read_moves("king")
-    knight_mvs = read_moves("knight")
+    king_mvs = read_txt("king")
+    knight_mvs = read_txt("knight")
     return Move_BB(king_mvs,knight_mvs)
 end
 
