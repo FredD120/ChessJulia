@@ -1,5 +1,5 @@
-using JLD2
-using logic
+#using JLD2
+#using logic
 
 "converts a single board sqaure to a bitboard"
 function to_UInt64(val)
@@ -254,17 +254,14 @@ function find_magic(dict)
     end
     lsb_max = trailing_zeros(cur_max)
 
-    count = 0
-    while true
+    Threads.@threads for _ in 1:100_000_000
         g = rand((UInt64(1) << (64-N-lsb_max)):(UInt64(1) << (64-lsb_max)))
-        count += 1
          
-        if check_magic(dict,g,N)  
+        if check_magic(dict,g,N) 
             return g
-        elseif count > 100_000_000
-            return UInt64(0)
         end
     end
+    return UInt64(0)
 end
 
 function all_sliding_moves(piece)
@@ -281,11 +278,13 @@ function all_sliding_moves(piece)
         println("currently searching $pos")
         push!(magics,find_magic(dict))
     end
-    save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Masks.txt")
-    save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Magics.txt")
-    save_dict(lookups,"$(pwd())/logic/move_BBs/","$(filename).jld2")
+    #save_data(sq_masks,"$(pwd())/logic/move_BBs/$(piece)Masks.txt")
+    save_data(magics,"$(pwd())/logic/move_BBs/$(piece)Magics.txt")
+    #save_dict(lookups,"$(pwd())/logic/move_BBs/","$(filename).jld2")
 end
-#all_sliding_moves("Bishop")
+all_sliding_moves("Rook")
+
+#Read in magics and construct array
 
 function open_JLD2(filename)
     path = "$(pwd())/logic/move_BBs/"
@@ -306,6 +305,7 @@ function assemble_magic_array(mag,dict,N,square)
             arr[ind] = val
         elseif arr[ind] != val
             println("Error at key $keycount and square $square")
+            break
         end
     end
     return arr
@@ -319,12 +319,22 @@ function make_magic(piece)
     magics = logic.read_txt(magicname)
 
     magic_arrays = Vector{Vector{UInt64}}()
+    magic_shifts = Vector{UInt64}()
 
     square = 0
     for (dict,magic) in zip(dict_vec,magics)
         square+=1
         N = Int(log(2,length(dict)))
         push!(magic_arrays,assemble_magic_array(magic,dict,N,square))
+        push!(magic_shifts,N)
     end
+    save_data(magic_arrays,"$(pwd())/logic/move_BBs/$(piece)sqArrays.txt")
+    save_data(magic_shifts,"$(pwd())/logic/move_BBs/$(piece)BitShifts.txt")
 end
-make_magic("Bishop")
+#make_magic("Rook")
+
+function get_magic(piece,pos)
+    dict,mask = sliding_move_BBs(pos,piece)
+    println(find_magic(dict))
+end
+#get_magic("Bishop",35)

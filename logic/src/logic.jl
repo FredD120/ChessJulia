@@ -27,12 +27,12 @@ end
 
 "take in all possible moves for a given piece from a txt file"
 function read_txt(filename)
-    moves = Vector{UInt64}(undef,64)
-    movelist = readlines("$(dirname(@__DIR__))/move_BBs/$(filename).txt")
-    for (i,m) in enumerate(movelist)
-        moves[i] = parse(UInt64,m)
+    data = Vector{UInt64}(undef,64)
+    data_str = readlines("$(dirname(@__DIR__))/move_BBs/$(filename).txt")
+    for (i,m) in enumerate(data_str)
+        data[i] = parse(UInt64,m)
     end   
-    return moves
+    return data
 end
 
 struct Move_BB
@@ -48,6 +48,23 @@ function Move_BB()
 end
 
 const moveset = Move_BB()
+
+struct Magic 
+    MagNum::UInt64
+    Mask::UInt64
+    BitShift::UInt8
+    SqArray::Vector{UInt64}
+end
+
+function read_magics(piece)
+    Masks = read_txt("$(piece)Masks")
+    Magics = read_txt("$(piece)Magics")
+    #sq_array = read_txt("$(piece)sqArrays")
+    #bitshift = 
+end
+
+const BishopMagics = read_magics("Bishop")
+const RookMagics = read_magics("Rook")
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
