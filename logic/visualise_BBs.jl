@@ -192,6 +192,7 @@ function mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,PLACE_PIECES)
         blockers = array_to_BB(highlight_pieces) 
         move_BB = bishop_moves(mouse_pos,blockers) #needs to belong to logic
 
+        move_BB = UInt64(0x01010101010101fe)
         #move_BB = bishop_mask[mouse_pos+1]
         GUIboard .= get_GUI_moves(move_BB,logic.Bishop)
     end

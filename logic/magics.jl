@@ -1,3 +1,5 @@
+using JLD2
+
 msb(b::UInt64) = 63 - leading_zeros(b)
 lsb(b::UInt64) = trailing_zeros(b)
 
@@ -7,7 +9,7 @@ const MAX_SQUARES = 12 #maximum bits in a mask for a single square piece
 const BB_RANKS = [UInt64(0xff) << (8 * (7-i)) for i in 0:7]
 const BB_FILES = [UInt64(0x101010101010101) << i for i in 0:7]
 
-square_rank(sq) = 7 - (sq << 3)
+square_rank(sq) = 7 - (sq >> 3)
 square_file(sq) = sq & 7
 
 square_distance(a, b) = max(abs(square_rank(a) - square_rank(b)),abs(square_file(a) - square_file(b)))
@@ -85,16 +87,13 @@ end
 NUM_MAGICS = UInt64(0)
 TABLE = Vector{UInt64}(undef,(1<<MAX_SQUARES)) # Temporary lookup table during search, size 2^SHIFT
 
-
 function init_stack(square,shift,deltas)    
     STACK = StackFrame[] # Clear previous stack
     max_occupied = square_mask(deltas, square)
-    println(max_occupied)
     current_mask = UInt64(0)
     last_prefix_bits = 0 # Number of bits in the mask of the previous level
 
     while true
-
         bit_to_add = UInt64(1) << msb(max_occupied ⊻ current_mask)
         current_mask |=  bit_to_add
 
@@ -106,8 +105,8 @@ function init_stack(square,shift,deltas)
         end
 
         mask_bits = 64 - lsb(current_mask) # Number of bits in the current mask (from right)
-        is_last_frame = (current_mask == max_occupied)
         max_magic = (mask_bits == 64) ? UInt64(0) : (UInt64(1) << mask_bits)
+        is_last_frame = (current_mask == max_occupied)
 
         refs = init_references(current_mask, deltas, square)
         age = fill!(zeros(UInt64, 1 << shift), typemax(UInt64)) # Initialize with all bits set
@@ -130,7 +129,7 @@ function init_stack(square,shift,deltas)
 end
 
 # We assume no UInt64 overflow in the range [prefix | frame.min_magic, frame.max_magic)
-function divide_and_conquer(prefix::UInt64, depth::Int,STACK)
+function divide_and_conquer(prefix::UInt64, depth::Int, STACK, SHIFT)
     # Use the global TABLE and the frame's age array
     frame = STACK[depth + 1] # Julia is 1-based indexing
 
@@ -166,12 +165,12 @@ function divide_and_conquer(prefix::UInt64, depth::Int,STACK)
                 break
             else
                 # Valid prefix, recurse deeper
-                divide_and_conquer(magic, depth + 1,STACK)
+                divide_and_conquer(magic, depth + 1,STACK, SHIFT)
             end
         end
 
         # Move to the next magic candidate for this depth
-        magic += frame.step_magic # Assuming no overflow needed here
+        magic += frame.step_magic 
 
         # Safety break for step=0 loop (shouldn't happen unless min=max and step=0?)
         if frame.step_magic == 0 && magic == prefix | frame.min_magic && magic != frame.max_magic
@@ -185,17 +184,36 @@ function start(piece,shift,square)
     deltas = []
     if piece == "Rook"
         deltas =  [8, 1, -8, -1, 0]
+    elseif piece == "Bishop"
+        deltas =  [7, -7, 9, -9, 0 ]
     end
 
     stack = init_stack(square, shift, deltas)
-
+  
     initial_prefix = UInt64(0)
     initial_depth = 0 # 0-indexed depth
 
-    #divide_and_conquer(initial_prefix, initial_depth)
-
-    for s in stack
-    println(s.refs)
-    end
+    divide_and_conquer(initial_prefix, initial_depth, stack, shift)
 end
-start("Rook",12,0)
+
+function open_JLD2(filename)
+    path = "$(pwd())/logic/move_BBs/"
+    dicts = Vector{Dict{UInt64,UInt64}}()
+    jldopen(path*filename*".jld2", "r") do file
+        dicts = file["data"]
+    end
+    return dicts
+end
+
+function main(pos,piece)
+    dicts = open_JLD2("$(piece)_dicts")
+    dict = dicts[pos+1]
+    N = Int(log(2,length(dict)))
+    start(piece,N,pos)
+end
+main(32,"Rook")
+
+#start("Rook",12,0)
+
+
+

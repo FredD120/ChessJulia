@@ -3,6 +3,7 @@ module logic
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft
 
+using JLD2
 using Random
 rng = Xoshiro(2955)
 
@@ -27,10 +28,10 @@ end
 
 "take in all possible moves for a given piece from a txt file"
 function read_txt(filename)
-    data = Vector{UInt64}(undef,64)
+    data = Vector{UInt64}()
     data_str = readlines("$(dirname(@__DIR__))/move_BBs/$(filename).txt")
-    for (i,m) in enumerate(data_str)
-        data[i] = parse(UInt64,m)
+    for d in data_str
+        push!(data, parse(UInt64,d))
     end   
     return data
 end
@@ -59,12 +60,12 @@ end
 function read_magics(piece)
     Masks = read_txt("$(piece)Masks")
     Magics = read_txt("$(piece)Magics")
-    #sq_array = read_txt("$(piece)sqArrays")
+    sq_array = read_txt("$(piece)sqArrays")
     #bitshift = 
 end
 
-const BishopMagics = read_magics("Bishop")
-const RookMagics = read_magics("Rook")
+#const BishopMagics = read_magics("Bishop")
+#const RookMagics = read_magics("Rook")
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
