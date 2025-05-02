@@ -3,6 +3,7 @@ module logic
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft
 
+using InteractiveUtils
 using JLD2
 using Random
 rng = Xoshiro(2955)
@@ -54,18 +55,41 @@ struct Magic
     MagNum::UInt64
     Mask::UInt64
     BitShift::UInt8
-    SqArray::Vector{UInt64}
+    Attacks::Vector{UInt64}
 end
 
 function read_magics(piece)
-    Masks = read_txt("$(piece)Masks")
-    Magics = read_txt("$(piece)Magics")
-    sq_array = read_txt("$(piece)sqArrays")
-    #bitshift = 
+    path = "$(dirname(@__DIR__))/move_BBs/Magic$(piece)s.jld2"
+    Masks = UInt64[]
+    Magics = UInt64[]
+    BitShifts = UInt8[]
+    AttackVec = Vector{UInt64}[]
+
+    jldopen(path, "r") do file
+        Masks = file["Masks"]
+        Magics = file["Magics"]
+        BitShifts = file["BitShifts"]
+        AttackVec = file["AttackVec"]
+    end
+
+    MagicVec = Magic[]
+    for (mask,magic,shift,attacks) in zip(Masks,Magics,BitShifts,AttackVec)
+        push!(MagicVec,Magic(magic,mask,shift,attacks))
+    end
+    return MagicVec
 end
 
-#const BishopMagics = read_magics("Bishop")
-#const RookMagics = read_magics("Rook")
+const BishopMagics = read_magics("Bishop")
+const RookMagics = read_magics("Rook")
+
+"Magic function to transform positional information to an index into an attack lookup table"
+magicIndex(BB,num,N) = (BB*num) >> (64-N)
+
+"Uses magic bitboards to identify blockers and retrieve legal attacks against them"
+function sliding_attacks(MagRef::Magic,all_pieces)
+    blocker_BB = all_pieces & MagRef.Mask
+    return MagRef.Attacks[magicIndex(blocker_BB,MagRef.MagNum,MagRef.BitShift)+1]
+end
 
 setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
@@ -333,12 +357,22 @@ end
 
 "not yet implemented"
 function get_bishopmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
-    return []
+    #poss_moves contains attacks against ally pieces
+    poss_moves = sliding_attacks(BishopMagics[location+1],all_pcs)
+    attacks = poss_moves & enemy_pcs
+    quiets = poss_moves & ~all_pcs 
+    return [moves_from_location(Bishop,board,attacks,location,checks,true);
+    moves_from_location(Bishop,board,quiets,location,checks,false)]
 end
 
 "not yet implemented"
 function get_rookmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
-    return []
+     #poss_moves contains attacks against ally pieces
+     poss_moves = sliding_attacks(RookMagics[location+1],all_pcs)
+     attacks = poss_moves & enemy_pcs
+     quiets = poss_moves & ~all_pcs 
+     return [moves_from_location(Rook,board,attacks,location,checks,true);
+     moves_from_location(Rook,board,quiets,location,checks,false)]
 end
 
 "returns attacks and quiet moves by the king"
@@ -346,14 +380,18 @@ function get_kingmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_p
     poss_moves = moveset.king[location+1]
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(UInt8(1),board,attacks,location,checks,true);
-    moves_from_location(UInt8(1),board,quiets,location,checks,false)]
+    return [moves_from_location(King,board,attacks,location,checks,true);
+    moves_from_location(King,board,quiets,location,checks,false)]
 end
 
 "return both rook and bishop moves"
 function get_queenmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
-    return [get_rookmoves(location,board,enemy_pcs,all_pcs,checks);
-    get_bishopmoves(location,board,enemy_pcs,all_pcs,checks)]
+   #poss_moves contains attacks against ally pieces
+   poss_moves = sliding_attacks(RookMagics[location+1],all_pcs) | sliding_attacks(BishopMagics[location+1],all_pcs)
+   attacks = poss_moves & enemy_pcs
+   quiets = poss_moves & ~all_pcs 
+   return [moves_from_location(Queen,board,attacks,location,checks,true);
+   moves_from_location(Queen,board,quiets,location,checks,false)]
 end
 
 "returns attacks and quiet moves by a knight"

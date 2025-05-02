@@ -337,44 +337,30 @@ function make_magic(piece)
     magicname = "$(piece)Magics"
     magics = logic.read_txt(magicname)
 
+    maskname = "$(piece)Masks"
+    masks = logic.read_txt(maskname)
+
     magic_arrays = Vector{Vector{UInt64}}()
     magic_shifts = logic.read_txt("$(piece)BitShifts")
 
     square = 0
+    dict_length = 0
+    array_length = 0
     for (dict,magic,shift) in zip(dict_vec,magics,magic_shifts)
         square+=1
-        push!(magic_arrays,assemble_magic_array(magic,dict,shift,square))
+        magic_array = assemble_magic_array(magic,dict,shift,square)
+        push!(magic_arrays,magic_array)
+
+        dict_length += length(dict)
+        array_length += length(magic_array)
+        println("Saved $piece square $square. Original dict had $(length(dict)) entries. Magic array has $(length(magic_array)) entries.")
     end
-    save_data(magic_arrays,"$(pwd())/logic/move_BBs/$(piece)sqArrays.txt")
+    println("Original dict size ≈ $(dict_length*8) bytes. Magic array size ≈ $(array_length*8) bytes.")
+    jldsave("$(pwd())/logic/move_BBs/Magic$(piece)s.jld2",Masks=masks,Magics=magics,BitShifts=magic_shifts,AttackVec=magic_arrays)
 end
-make_magic("Rook")
+make_magic("Bishop")
 
 function get_magic(piece,pos)
     dict,mask = sliding_move_BBs(pos,piece)
     println(find_magic(dict))
 end
-#get_magic("Bishop",35)
-
-#=
-Magic found:18032042255597584
-Magic found:9042435186901008
-Magic found:9016064087703568
-Magic found:4521260553355280
-Magic found:9033656273747984
-Magic found:8998471901659152
-Magic found:18032076615335952
-Magic found:18023297702182928
-Magic found:18005705516138512
-Magic found:17996926602985488
-=#
-
-function test_magic(magic,square)
-    dictname = "Bishop_dicts"
-    dict_vec = open_JLD2(dictname)
-    dict = dict_vec[square+1]
-    N = Int(log(2,length(dict)))
-
-    arr = assemble_magic_array(magic,dict,N,square)
-    println("magic successful")
-end
-#test_magic(UInt64(18005705516138512),32)
