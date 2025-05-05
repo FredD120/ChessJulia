@@ -216,11 +216,12 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                     if logicstate.State != Neutral()
                         if logicstate.State == Draw()
                             println("Game over: Draw")
-                        elseif Whitesmove(logicstate)
+                        elseif Whitesmove(logicstate.ColourIndex)
                             println("Game over: Black wins")
                         else
                             println("Game over: White wins")
                         end
+                        break
                     end
                 end
             end
@@ -254,9 +255,8 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
-    #test knights and kings
-    #FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1"
+    #FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
+    FEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
 
     WIDTH = 800

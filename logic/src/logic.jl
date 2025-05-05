@@ -27,6 +27,8 @@ struct Move
     capture_type::UInt8
 end
 
+Base.show(io::IO,m::Move) = print(io,"From=$(Int(m.from));To=$(Int(m.to));PieceId=$(Int(m.piece_type));Capture ID=$(Int(m.capture_type))")
+
 "take in all possible moves for a given piece from a txt file"
 function read_txt(filename)
     data = Vector{UInt64}()
@@ -82,7 +84,7 @@ end
 const BishopMagics = read_magics("Bishop")
 const RookMagics = read_magics("Rook")
 
-"Magic function to transform positional information to an index into an attack lookup table"
+"Magic function to transform positional information to an index (0-63) into an attack lookup table"
 magicIndex(BB,num,N) = (BB*num) >> (64-N)
 
 "Uses magic bitboards to identify blockers and retrieve legal attacks against them"
@@ -281,7 +283,7 @@ function UCImove(move::Move)
 end
 
 "Returns a single bitboard representing the positions of an array of pieces"
-function player_pieces(piece_vec::VecOrMat{UInt64})
+function BitboardUnion(piece_vec::VecOrMat{UInt64})
     BB = UInt64(0)
     for piece in piece_vec
         BB |= piece
@@ -291,6 +293,10 @@ end
 
 "Helper function to obtain vector of ally bitboards"
 ally_pieces(b::Boardstate) = b.pieces[b.ColourIndex+1:b.ColourIndex+6]
+
+"returns a vector of all ally bitboards excluding king"
+ally_noking_pieces(b::Boardstate) = b.pieces[b.ColourIndex+2:b.ColourIndex+6]
+
 
 "Helper function to obtain vector of enemy bitboards"
 function enemy_pieces(b::Boardstate) 
@@ -311,39 +317,95 @@ function GUIposition(board::Boardstate)
     return position
 end
 
+"store information about how to make moves without king being captured"
+struct LegalInfo
+    checks::UInt64
+    blocks::UInt64
+    pins::UInt64
+    attack_num::UInt8
+end
+
+function possible_moves(PieceID,location,all_pcs)
+    if PieceID == King
+        return moveset.king[location+1]
+    elseif PieceID == Knight
+        return moveset.knight[location+1]
+    elseif PieceID == Rook
+        return sliding_attacks(RookMagics[location+1],all_pcs)
+    elseif PieceID == Bishop
+        return sliding_attacks(BishopMagics[location+1],all_pcs)
+    elseif PieceID == Queen
+        return sliding_attacks(RookMagics[location+1],all_pcs) | sliding_attacks(BishopMagics[location+1],all_pcs)
+    end
+end
+
 "checks enemy pieces to see if any are attacking the current square, returns BB of attackers"
-function attackable(board::Boardstate,position::Integer)::UInt64
+function attack_pcs(board::Boardstate,all_pcs::UInt64,location::Integer)::UInt64
     attacks = UInt64(0)
+    kingmoves = possible_moves(King,location,all_pcs)
+    attacks |= (kingmoves & enemy_pieces(board)[King])
 
-    kingmoves = moveset.king[position+1]
-    attacks |= (kingmoves & enemy_pieces(board)[1])
+    knightmoves = possible_moves(Knight,location,all_pcs)
+    attacks |= (knightmoves & enemy_pieces(board)[Knight])
 
-    knightmoves = moveset.knight[position+1]
-    attacks |= (knightmoves & enemy_pieces(board)[5])
+    rookmoves = possible_moves(Rook,location,all_pcs)
+    rookattacks = (rookmoves & (enemy_pieces(board)[Rook] | enemy_pieces(board)[Queen]))
+    attacks |= rookattacks
+
+    bishopmoves = possible_moves(Bishop,location,all_pcs)
+    bishopattacks = (bishopmoves & (enemy_pieces(board)[Bishop] | enemy_pieces(board)[Queen]))
+    attacks |= bishopattacks
 
     return attacks
 end
 
+"returns struct containing info on attacks, blocks and pins of king"
+function attack_info(board::Boardstate,all_pcs::UInt64,position::Integer)::LegalInfo
+    attacks = attack_pcs(board,all_pcs,position)
+    blocks = UInt64(0)
+    pins = UInt64(0)
+
+    attacker_list = identify_locations(attacks)
+    attacker_num = length(attacker_list)
+    if attacker_num == 1
+        attack_pos = attacker_list[end]
+        for piece in [Rook,Bishop,Queen]
+            if (UInt64(1)<<attack_pos) & enemy_pieces(board)[piece] > 0
+                attackmoves = possible_moves(piece,attack_pos,all_pcs)
+                kingmoves = possible_moves(piece,position,all_pcs)
+                blocks = attackmoves & kingmoves
+            end
+        end
+    end
+
+    return LegalInfo(attacks,blocks,pins,attacker_num)
+end
+
 "returns true if move is legal, based on whether king is in check, castling is allowed, discovered checks etc"
-function is_legal(board::Boardstate,type::UInt8,position::Integer,checks::UInt64)::Bool
+function is_legal(board::Boardstate,type::UInt8,position,all_pcs,info::LegalInfo)::Bool
     #king moves
-    if type == 1
-        if attackable(board,position) > 0
+    if type == King
+        #possibly expensive to re-check on every king move
+        #must remove king when checking if square is attacked
+        if attack_pcs(board,all_pcs & ~board.ally_pieces[King],position) > 0
             return false
         end
-    #if we can capture the sole checking piece it is legal
-    elseif setzero(checks,position) > 0
-        return false
+
+    elseif info.attack_num == 1
+        #If we are not capturing piece and not blocking piece, it is an illegal move
+        if (setzero(info.checks,position) > 0) & (info.blocks & (UInt64(1) << position) == 0)
+            return false
+        end
     end
     return true
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
-function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin::Integer,checks::UInt64,isattack::Bool)::Vector{Move}
+function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,origin,all_pcs,info::LegalInfo,isattack::Bool)::Vector{Move}
     locs = identify_locations(destinations)
     moves = Vector{Move}()
     for loc in locs
-        if is_legal(board,type,loc,checks)
+        if is_legal(board,type,loc,all_pcs,info)
             attacked_pieceID = NULL_PIECE
             if isattack
                 #move struct needs info on piece being attacked
@@ -356,55 +418,55 @@ function moves_from_location(type::UInt8,board::Boardstate,destinations::UInt64,
 end
 
 "not yet implemented"
-function get_bishopmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+function get_bishopmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,info::LegalInfo)::Vector{Move}
     #poss_moves contains attacks against ally pieces
-    poss_moves = sliding_attacks(BishopMagics[location+1],all_pcs)
+    poss_moves = possible_moves(Bishop,location,all_pcs)
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(Bishop,board,attacks,location,checks,true);
-    moves_from_location(Bishop,board,quiets,location,checks,false)]
+    return [moves_from_location(Bishop,board,attacks,location,all_pcs,info,true);
+    moves_from_location(Bishop,board,quiets,location,all_pcs,info,false)]
 end
 
 "not yet implemented"
-function get_rookmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+function get_rookmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,info::LegalInfo)::Vector{Move}
      #poss_moves contains attacks against ally pieces
-     poss_moves = sliding_attacks(RookMagics[location+1],all_pcs)
+     poss_moves = possible_moves(Rook,location,all_pcs)
      attacks = poss_moves & enemy_pcs
      quiets = poss_moves & ~all_pcs 
-     return [moves_from_location(Rook,board,attacks,location,checks,true);
-     moves_from_location(Rook,board,quiets,location,checks,false)]
+     return [moves_from_location(Rook,board,attacks,location,all_pcs,info,true);
+     moves_from_location(Rook,board,quiets,location,all_pcs,info,false)]
 end
 
 "returns attacks and quiet moves by the king"
-function get_kingmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
-    poss_moves = moveset.king[location+1]
+function get_kingmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,info::LegalInfo)::Vector{Move}
+    poss_moves = possible_moves(King,location,all_pcs)
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(King,board,attacks,location,checks,true);
-    moves_from_location(King,board,quiets,location,checks,false)]
+    return [moves_from_location(King,board,attacks,location,all_pcs,info,true);
+    moves_from_location(King,board,quiets,location,all_pcs,info,false)]
 end
 
 "return both rook and bishop moves"
-function get_queenmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+function get_queenmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,info::LegalInfo)::Vector{Move}
    #poss_moves contains attacks against ally pieces
-   poss_moves = sliding_attacks(RookMagics[location+1],all_pcs) | sliding_attacks(BishopMagics[location+1],all_pcs)
+   poss_moves = possible_moves(Queen,location,all_pcs)
    attacks = poss_moves & enemy_pcs
    quiets = poss_moves & ~all_pcs 
-   return [moves_from_location(Queen,board,attacks,location,checks,true);
-   moves_from_location(Queen,board,quiets,location,checks,false)]
+   return [moves_from_location(Queen,board,attacks,location,all_pcs,info,true);
+   moves_from_location(Queen,board,quiets,location,all_pcs,info,false)]
 end
 
 "returns attacks and quiet moves by a knight"
-function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
-    poss_moves = moveset.knight[location+1]
+function get_knightmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,info::LegalInfo)::Vector{Move}
+    poss_moves = possible_moves(Knight,location,all_pcs)
     attacks = poss_moves & enemy_pcs
     quiets = poss_moves & ~all_pcs 
-    return [moves_from_location(UInt8(5),board,attacks,location,checks,true);
-    moves_from_location(UInt8(5),board,quiets,location,checks,false)]
+    return [moves_from_location(Knight,board,attacks,location,all_pcs,info,true);
+    moves_from_location(Knight,board,quiets,location,all_pcs,info,false)]
 end
 
 "not yet implemented"
-function get_pawnmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,checks::UInt64)::Vector{Move}
+function get_pawnmoves(location::UInt8,board::Boardstate,enemy_pcs::UInt64,all_pcs::UInt64,info::LegalInfo)::Vector{Move}
     return []
 end
 
@@ -417,26 +479,29 @@ function generate_moves(board::Boardstate)::Vector{Move}
     if (board.Data.Halfmoves[end] >= 100) | (count(i->(i==board.ZHash),board.Data.ZHashHist) >= 3)
         board.State = Draw()
     else
-    enemy_pcs = player_pieces(enemy_pieces(board))
-    all_pcs = player_pieces(board.pieces)
-    checks = UInt64(0)
+    enemy_pcs = BitboardUnion(enemy_pieces(board))
+    all_pcs = BitboardUnion(board.pieces)
 
-    for (pieceID,pieceBB) in enumerate(ally_pieces(board))
-        if pieceBB > 0
-            loc_list = identify_locations(pieceBB)
-            for loc in loc_list
-                #king is first piece looked at, need checking attackers for move generation
-                if pieceID == King
-                    checks = attackable(board,loc)
+    kingpos = identify_locations(board.pieces[King+board.ColourIndex])[end]
+    legal_info = attack_info(board,all_pcs,kingpos)
+
+    movelist = get_kingmoves(kingpos,board,enemy_pcs,all_pcs,legal_info)
+
+    #if multiple checks on king, only king can move
+    if legal_info.attack_num <= 1
+        for (pieceID,pieceBB) in enumerate(ally_noking_pieces(board))
+            if pieceBB > 0
+                loc_list = identify_locations(pieceBB)
+                for loc in loc_list
+                    #use an array of functions to get moves for different pieces
+                    movelist = vcat(movelist,get_piecemoves[pieceID+1](loc,board,enemy_pcs,all_pcs,legal_info))
                 end
-                #use an array of functions to get moves for different pieces
-                movelist = vcat(movelist,get_piecemoves[pieceID](loc,board,enemy_pcs,all_pcs,checks))
             end
         end
     end
 
     if length(movelist) == 0
-        if checks > 0
+        if legal_info.checks > 0
             board.State = Loss()
         else
             board.State = Draw()
