@@ -42,18 +42,18 @@ function load_pieces(renderer)
     filepath = "$(pwd())/ChessPieces/"
     texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
 
-    texture_vec[logic.King+logic.White] = get_texture(renderer,filepath,"WhiteKing")
-    texture_vec[logic.Queen+logic.White] = get_texture(renderer,filepath,"WhiteQueen")
-    texture_vec[logic.Pawn+logic.White] = get_texture(renderer,filepath,"WhitePawn")
-    texture_vec[logic.Bishop+logic.White] = get_texture(renderer,filepath,"WhiteBishop")
-    texture_vec[logic.Knight+logic.White] = get_texture(renderer,filepath,"WhiteKnight")
-    texture_vec[logic.Rook+logic.White] = get_texture(renderer,filepath,"WhiteRook")
-    texture_vec[logic.King+logic.Black] = get_texture(renderer,filepath,"BlackKing")
-    texture_vec[logic.Queen+logic.Black] = get_texture(renderer,filepath,"BlackQueen")
-    texture_vec[logic.Pawn+logic.Black] = get_texture(renderer,filepath,"BlackPawn")
-    texture_vec[logic.Bishop+logic.Black] = get_texture(renderer,filepath,"BlackBishop")
-    texture_vec[logic.Knight+logic.Black] = get_texture(renderer,filepath,"BlackKnight")
-    texture_vec[logic.Rook+logic.Black] = get_texture(renderer,filepath,"BlackRook")
+    texture_vec[val(King())+White] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[val(Queen())+White] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[val(Pawn())+White] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[val(Bishop())+White] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[val(Knight())+White] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[val(Rook())+White] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[val(King())+Black] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[val(Queen())+Black] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[val(Pawn())+Black] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[val(Bishop())+Black] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[val(Knight())+Black] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[val(Rook())+Black] = get_texture(renderer,filepath,"BlackRook")
 
     return texture_vec
 end
@@ -255,8 +255,8 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
-    FEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
+    FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
+    #FEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
 
     WIDTH = 800

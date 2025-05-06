@@ -2,7 +2,7 @@ module logic
 
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
-King, Queen, Rook, Bishop, Knight, Pawn
+King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val
 
 using InteractiveUtils
 using JLD2
@@ -414,7 +414,7 @@ function quiet_moves(moveBB,all_pcs)
 end
 
 "returns attack and quiets moves for king only if legal, based on checks, pins etc"
-function quietattacks(piece::King,location,board,enemy_pcs,all_pcs,info::LegalInfo)::UInt64
+function quietattacks(piece::King,location,board,enemy_pcs,all_pcs,info::LegalInfo)
     poss_moves = possible_moves(piece,location,all_pcs)
     #construct BB of all enemy attacks, must remove king when checking if square is attacked
     #possibly expensive to re-check on every king move
@@ -422,11 +422,11 @@ function quietattacks(piece::King,location,board,enemy_pcs,all_pcs,info::LegalIn
 
     attacks = attack_moves(legal_moves,enemy_pcs)
     quiets = quiet_moves(legal_moves,all_pcs)
-    return quiets, attacks
+    return quiets,attacks
 end
 
 "returns attack and quiets moves for non-king pieces only if legal"
-function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,board,enemy_pcs,all_pcs,info::LegalInfo)::UInt64
+function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,board,enemy_pcs,all_pcs,info::LegalInfo)
     poss_moves = possible_moves(piece,location,all_pcs)
     attacks = attack_moves(poss_moves,enemy_pcs)
     quiets = quiet_moves(poss_moves,all_pcs)
@@ -478,15 +478,15 @@ function generate_moves(board::Boardstate)::Vector{Move}
         for loc in loc_list
             quiets,attacks = quietattacks(type,loc,board,enemy_pcsBB,all_pcsBB,legal_info)
 
-            quiet_moves = moves_from_location(val(type),enemy,quiets,location,false)
-            attack_moves = moves_from_location(val(type),enemy,attacks,location,true)
+            quiet_moves = moves_from_location(val(type),enemy,quiets,loc,false)
+            attack_moves = moves_from_location(val(type),enemy,attacks,loc,true)
 
             movelist = vcat(movelist,quiet_moves)
             movelist = vcat(movelist,attack_moves)
         end
 
         #if multiple checks on king, only king can move
-        if legal_info.attack_num <= 1
+        if legal_info.attack_num > 1
             break
         end
     end

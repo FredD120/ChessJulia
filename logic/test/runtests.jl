@@ -89,29 +89,10 @@ function test_identifylocs()
 end
 test_identifylocs()
 
-function test_Zobrist()
-    board = Boardstate(FEN)
-    @assert board.ZHash == 3988342487599293876
-
-    moves = generate_moves(board)
-    for move in moves
-       if (move.from == 57) & (move.to == 40)
-        make_move!(move,board)
-       end
-    end
-    @assert board.Data.ZHashHist[1] == 3988342487599293876
-
-    newFEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
-    newboard = Boardstate(newFEN)
-    @assert board.ZHash == newboard.ZHash
-end
-test_Zobrist()
-
 function test_movfromloc()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    legal_info = logic.LegalInfo(0,0,0,0)
-    moves = logic.moves_from_location(UInt8(1),board,UInt64(3),2,UInt64(0),legal_info,false)
+    moves = logic.moves_from_location(logic.val(King()),logic.enemy_pieces(board),UInt64(3),2,false)
     @assert length(moves) == 2
     @assert moves[1].capture_type == 0
     @assert moves[2].from == 2
@@ -132,8 +113,8 @@ test_kingqatt()
 function test_knightqatt()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    legal_info = logic.LegalInfo(0,0,0,0)
-    qmoves,amoves = logic.quietattacks(UInt8(0),board,UInt64(0),UInt64(0),legal_info)
+    legal_info = logic.LegalInfo(typemax(UInt64),typemax(UInt64),0,0)
+    qmoves,amoves = logic.quietattacks(Knight(),UInt64(0),board,UInt64(0),UInt64(0),legal_info)
     @assert length(logic.identify_locations(qmoves)) == 2
     @assert length(logic.identify_locations(amoves)) == 0
 end
@@ -261,10 +242,10 @@ function test_attack_pcs()
     basicFEN = "1k7/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(basicFEN)
 
-    attacks = logic.attack_pcs(board,UInt64(0),0)
+    attacks = logic.attack_pcs(logic.enemy_pieces(board),UInt64(0),0)
     @assert attacks == UInt(2)
 
-    attacks = logic.attack_pcs(board,UInt64(0),1)
+    attacks = logic.attack_pcs(logic.enemy_pieces(board),UInt64(0),1)
     @assert attacks == 0
 end
 test_attack_pcs()
@@ -274,7 +255,7 @@ function test_legal()
     board = Boardstate(knightFEN)
 
     moves = generate_moves(board)
-    @assert length(moves) == 1
+    @assert length(moves) == 1 "King must capture knight"
     @assert moves[1].capture_type > 0
     @assert moves[1].piece_type == 5
 
@@ -289,14 +270,14 @@ function test_legal()
     slidingFEN = "K7/7r/8/8/8/8/8/1r4k1 w - 0 1"
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
-    @assert length(moves) == 0
+    @assert length(moves) == 0 "White king not stalemated"
     @assert board.State == Draw()
 
     "WKing checkmated by queen and 2 rooks, unless bishop blocks"
     slidingFEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
-    @assert length(moves) == 1
+    @assert length(moves) == 1 "King moves backwards into check?"
     @assert board.State == Neutral()
     @assert moves[1].piece_type == logic.val(Bishop())
 end
@@ -419,6 +400,24 @@ function test_sliding()
     @assert count(i->(i.capture_type == logic.Queen),newmoves) == 1
 end
 test_sliding()
+
+function test_Zobrist()
+    board = Boardstate(FEN)
+    @assert board.ZHash == 3988342487599293876
+
+    moves = generate_moves(board)
+    for move in moves
+       if (move.from == 57) & (move.to == 40)
+        make_move!(move,board)
+       end
+    end
+    @assert board.Data.ZHashHist[1] == 3988342487599293876
+
+    newFEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    newboard = Boardstate(newFEN)
+    @assert board.ZHash == newboard.ZHash
+end
+test_Zobrist()
 
 function test_perft()
     basicFEN = "K7/8/8/8/8/8/8/7k w KQkq - 0 1"
