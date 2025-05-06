@@ -44,9 +44,9 @@ test_GUIboard()
 
 function test_BitboardUnion()
     board = Boardstate(FEN)
-    white = logic.BitboardUnion(logic.ally_pieces(board))
-    black = logic.BitboardUnion(logic.enemy_pieces(board))
-    all = logic.BitboardUnion(board.pieces)
+    white = logic.BBunion(logic.ally_pieces(board))
+    black = logic.BBunion(logic.enemy_pieces(board))
+    all = logic.BBunion(board.pieces)
     compareW = UInt64(0)
     compareB = UInt64(0)
 
@@ -119,23 +119,25 @@ function test_movfromloc()
 end
 test_movfromloc()
 
-function test_kingmoves()
+function test_kingqatt()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
     legal_info = logic.LegalInfo(0,0,0,0)
-    moves = logic.get_kingmoves(UInt8(0),board,UInt64(0),UInt64(0),legal_info)
-    @assert length(moves) == 3
+    qmoves,amoves = logic.quietattacks(King(),UInt8(0),board,UInt64(0),UInt64(0),legal_info)
+    @assert length(logic.identify_locations(qmoves)) == 3
+    @assert length(logic.identify_locations(amoves)) == 0
 end
-test_kingmoves()
+test_kingqatt()
 
-function test_knightmoves()
+function test_knightqatt()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
     legal_info = logic.LegalInfo(0,0,0,0)
-    moves = logic.get_knightmoves(UInt8(0),board,UInt64(0),UInt64(0),legal_info)
-    @assert length(moves) == 2
+    qmoves,amoves = logic.quietattacks(UInt8(0),board,UInt64(0),UInt64(0),legal_info)
+    @assert length(logic.identify_locations(qmoves)) == 2
+    @assert length(logic.identify_locations(amoves)) == 0
 end
-test_knightmoves()
+test_knightqatt()
 
 function test_movegetters()
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
@@ -268,13 +270,6 @@ end
 test_attack_pcs()
 
 function test_legal()
-    basicFEN = "K7/8/n7/8/8/8/8/8 w - 0 1"
-    board = Boardstate(basicFEN)
-    legal_info = logic.attack_info(board,UInt64(0),0)
-
-    @assert legal_info.checks == 0
-    @assert logic.is_legal(board,UInt8(1),1,UInt64(0),legal_info) == false
-
     knightFEN = "K7/8/1nnn4/8/N7/8/8/8 w - 0 1"
     board = Boardstate(knightFEN)
 
@@ -303,6 +298,7 @@ function test_legal()
     moves = generate_moves(board)
     @assert length(moves) == 1
     @assert board.State == Neutral()
+    @assert moves[1].piece_type == logic.val(Bishop())
 end
 test_legal()
 
