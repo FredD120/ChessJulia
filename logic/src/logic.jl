@@ -22,6 +22,7 @@ struct Pawn end
 
 const piecetypes = [King(),Queen(),Rook(),Bishop(),Knight(),Pawn()]
 
+"Return index associated with piecetype"
 val(::King) = UInt8(1)
 val(::Queen) = UInt8(2)
 val(::Rook) = UInt8(3)
@@ -342,7 +343,7 @@ possible_moves(::Rook,location,all_pcs) = sliding_attacks(RookMagics[location+1]
 possible_moves(::Bishop,location,all_pcs) = sliding_attacks(BishopMagics[location+1],all_pcs)
 "All pseudolegal Queen moves"
 possible_moves(::Queen,location,all_pcs) = sliding_attacks(RookMagics[location+1],all_pcs) | sliding_attacks(BishopMagics[location+1],all_pcs)
-"Not yet implemented"
+"Not yet implemented, but must only be attacking moves"
 possible_moves(::Pawn,location,all_pcs) = UInt64(0)
 
 "checks enemy pieces to see if any are attacking the current square, returns BB of attackers"
@@ -368,24 +369,24 @@ end
 "returns struct containing info on attacks, blocks and pins of king by enemy piecelist"
 function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position::Integer)::LegalInfo
     attacks = attack_pcs(pc_list,all_pcs,position)
-    blocks = typemax(UInt64)
+    blocks = UInt64(0)
     pins = UInt64(0)
 
-    attacker_list = identify_locations(attacks)
-    attacker_num = length(attacker_list)
+    attacker_num = count_ones(attacks)
     #if only a single sliding piece is attacking the king, it can be blocked
     if attacker_num == 1
-        attack_pos = attacker_list[1]
-        for piece in [Rook(),Bishop(),Queen()]
-            if (UInt64(1)<<attack_pos) & pc_list[val(piece)] > 0
+        for piece in [Rook(),Bishop()]
+            slide_attckers = attacks & (pc_list[val(piece)] | pc_list[val(Queen())])
+            for attack_pos in identify_locations(slide_attckers)
                 attackmoves = possible_moves(piece,attack_pos,all_pcs)
                 kingmoves = possible_moves(piece,position,all_pcs)
                 blocks = attackmoves & kingmoves
             end
         end
-    #if nothing is attacking the king, we can attack anywhere
+    #if nothing is attacking the king, we can attack/move anywhere
     elseif attacker_num == 0
         attacks = typemax(UInt64)
+        blocks = typemax(UInt64)
     end
 
     return LegalInfo(attacks,blocks,pins,attacker_num)
@@ -408,7 +409,7 @@ function attack_moves(moveBB,enemy_pcs)
     return moveBB & enemy_pcs
 end
 
-"Bitboard containing only the quietss by a particular piece"
+"Bitboard containing only the quiets by a particular piece"
 function quiet_moves(moveBB,all_pcs)
     return moveBB & ~all_pcs
 end
@@ -418,7 +419,8 @@ function quietattacks(piece::King,location,board,enemy_pcs,all_pcs,info::LegalIn
     poss_moves = possible_moves(piece,location,all_pcs)
     #construct BB of all enemy attacks, must remove king when checking if square is attacked
     #possibly expensive to re-check on every king move
-    legal_moves = poss_moves & ~all_poss_moves(enemy_pieces(board),all_pcs)
+    all_except_king = all_pcs & ~(UInt64(1)<<location)
+    legal_moves = poss_moves & ~all_poss_moves(enemy_pieces(board),all_except_king)
 
     attacks = attack_moves(legal_moves,enemy_pcs)
     quiets = quiet_moves(legal_moves,all_pcs)
@@ -438,8 +440,8 @@ function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,board,enem
 end
 
 "not yet implemented"
-function quietattacks(piece::Pawn,location,board,enemy_pcs,all_pcs,info::LegalInfo)::UInt64
-    return UInt64(0)
+function quietattacks(piece::Pawn,location,board,enemy_pcs,all_pcs,info::LegalInfo)
+    return UInt64(0),UInt64(0)
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
@@ -492,7 +494,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
     end
 
     if length(movelist) == 0
-        if legal_info.checks > 0
+        if legal_info.attack_num > 0
             board.State = Loss()
         else
             board.State = Draw()

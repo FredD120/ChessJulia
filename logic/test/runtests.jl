@@ -1,7 +1,7 @@
 using logic
 using BenchmarkTools
 
-const expensive = false
+const expensive = true
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -100,8 +100,41 @@ function test_movfromloc()
 end
 test_movfromloc()
 
+function test_legalinfo()
+    simpleFEN = "K7/R7/8/8/8/8/8/r6b w - - 0 1"
+    board = Boardstate(simpleFEN)    
+    all_pcs = logic.BBunion(board.pieces)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0)
+
+    @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
+    @assert info.attack_num == 1
+    #@assert info.
+    @assert length(logic.identify_locations(info.blocks)) == 6 "list of squares to block bishop"
+end
+test_legalinfo()
+
+function test_attckpcs()
+    simpleFEN = "K6r/2n5/8/8/8/8/8/7b w - - 0 1"
+    board = Boardstate(simpleFEN)    
+    all_pcs = logic.BBunion(board.pieces)
+
+    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,0)
+    @assert checkers == (UInt64(1)<<7)|(UInt64(1)<<10)|(UInt64(1)<<63) "2 sliding piece attacks and a knight"
+end
+test_attckpcs()
+
+function test_allposs()
+    simpleFEN = "R1R1R1R1/8/8/8/8/8/8/1R1R1R1R b - - 0 1"
+    board = Boardstate(simpleFEN) 
+    all_pcs = logic.BBunion(board.pieces)  
+    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs)
+
+    @assert attkBB == typemax(UInt64) "rooks are covering all squares"
+end
+test_allposs()
+
 function test_kingqatt()
-    simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
+    simpleFEN = "8/8/8/8/8/8/8/8 w - - 0 1"
     board = Boardstate(simpleFEN)
     legal_info = logic.LegalInfo(0,0,0,0)
     qmoves,amoves = logic.quietattacks(King(),UInt8(0),board,UInt64(0),UInt64(0),legal_info)
@@ -255,9 +288,9 @@ function test_legal()
     board = Boardstate(knightFEN)
 
     moves = generate_moves(board)
-    @assert length(moves) == 1 "King must capture knight"
+    @assert length(moves) == 1 "Wknight must capture knight"
     @assert moves[1].capture_type > 0
-    @assert moves[1].piece_type == 5
+    @assert moves[1].piece_type == val(Knight())
 
     kingFEN = "Kkk5/8/1nnn4/8/N7/8/8/8 w - 0 1"
     board = Boardstate(kingFEN)
@@ -279,7 +312,7 @@ function test_legal()
     moves = generate_moves(board)
     @assert length(moves) == 1 "King moves backwards into check?"
     @assert board.State == Neutral()
-    @assert moves[1].piece_type == logic.val(Bishop())
+    @assert moves[1].piece_type == val(Bishop())
 end
 test_legal()
 
@@ -391,13 +424,13 @@ function test_sliding()
     @assert count(i->(i.capture_type > 0),moves) == 2
 
     for m in moves
-        if m.capture_type == logic.Rook
+        if m.capture_type == val(Rook())
             make_move!(m,board)
         end
     end
     newmoves = generate_moves(board)
     @assert length(newmoves) == 12
-    @assert count(i->(i.capture_type == logic.Queen),newmoves) == 1
+    @assert count(i->(i.capture_type == val(Queen())),newmoves) == 1
 end
 test_sliding()
 
