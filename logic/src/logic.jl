@@ -330,6 +330,7 @@ struct LegalInfo
     checks::UInt64
     blocks::UInt64
     pins::UInt64
+    attack_sqs::UInt64
     attack_num::UInt8
 end
 
@@ -389,7 +390,11 @@ function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position::Integer):
         blocks = typemax(UInt64)
     end
 
-    return LegalInfo(attacks,blocks,pins,attacker_num)
+    #construct BB of all enemy attacks, must remove king when checking if square is attacked
+    all_except_king = all_pcs & ~(UInt64(1)<<position)
+    attacked_sqs = all_poss_moves(pc_list,all_except_king)
+
+    return LegalInfo(attacks,blocks,pins,attacked_sqs,attacker_num)
 end
 
 "Bitboard of all squares being attacked by a side"
@@ -415,12 +420,10 @@ function quiet_moves(moveBB,all_pcs)
 end
 
 "returns attack and quiets moves for king only if legal, based on checks, pins etc"
-function quietattacks(piece::King,location,board,enemy_pcs,all_pcs,info::LegalInfo)
+function quietattacks(piece::King,location,enemy_pcs,all_pcs,info::LegalInfo)
     poss_moves = possible_moves(piece,location,all_pcs)
-    #construct BB of all enemy attacks, must remove king when checking if square is attacked
-    #possibly expensive to re-check on every king move
-    all_except_king = all_pcs & ~(UInt64(1)<<location)
-    legal_moves = poss_moves & ~all_poss_moves(enemy_pieces(board),all_except_king)
+    #king can't move into check
+    legal_moves = poss_moves & ~info.attack_sqs
 
     attacks = attack_moves(legal_moves,enemy_pcs)
     quiets = quiet_moves(legal_moves,all_pcs)
@@ -428,7 +431,7 @@ function quietattacks(piece::King,location,board,enemy_pcs,all_pcs,info::LegalIn
 end
 
 "returns attack and quiets moves for non-king pieces only if legal"
-function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,board,enemy_pcs,all_pcs,info::LegalInfo)
+function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,enemy_pcs,all_pcs,info::LegalInfo)
     poss_moves = possible_moves(piece,location,all_pcs)
     attacks = attack_moves(poss_moves,enemy_pcs)
     quiets = quiet_moves(poss_moves,all_pcs)
@@ -440,7 +443,7 @@ function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,board,enem
 end
 
 "not yet implemented"
-function quietattacks(piece::Pawn,location,board,enemy_pcs,all_pcs,info::LegalInfo)
+function quietattacks(piece::Pawn,location,enemy_pcs,all_pcs,info::LegalInfo)
     return UInt64(0),UInt64(0)
 end
 
@@ -478,7 +481,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
     for (type,pieceBB) in zip(piecetypes,ally)
         loc_list = identify_locations(pieceBB)
         for loc in loc_list
-            quiets,attacks = quietattacks(type,loc,board,enemy_pcsBB,all_pcsBB,legal_info)
+            quiets,attacks = quietattacks(type,loc,enemy_pcsBB,all_pcsBB,legal_info)
 
             quiet_moves = moves_from_location(val(type),enemy,quiets,loc,false)
             attack_moves = moves_from_location(val(type),enemy,attacks,loc,true)

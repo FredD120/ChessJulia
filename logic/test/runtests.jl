@@ -136,8 +136,8 @@ test_allposs()
 function test_kingqatt()
     simpleFEN = "8/8/8/8/8/8/8/8 w - - 0 1"
     board = Boardstate(simpleFEN)
-    legal_info = logic.LegalInfo(0,0,0,0)
-    qmoves,amoves = logic.quietattacks(King(),UInt8(0),board,UInt64(0),UInt64(0),legal_info)
+    legal_info = logic.LegalInfo(0,0,0,0,0)
+    qmoves,amoves = logic.quietattacks(King(),UInt8(0),UInt64(0),UInt64(0),legal_info)
     @assert length(logic.identify_locations(qmoves)) == 3
     @assert length(logic.identify_locations(amoves)) == 0
 end
@@ -146,8 +146,8 @@ test_kingqatt()
 function test_knightqatt()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    legal_info = logic.LegalInfo(typemax(UInt64),typemax(UInt64),0,0)
-    qmoves,amoves = logic.quietattacks(Knight(),UInt64(0),board,UInt64(0),UInt64(0),legal_info)
+    legal_info = logic.LegalInfo(typemax(UInt64),typemax(UInt64),0,0,0)
+    qmoves,amoves = logic.quietattacks(Knight(),UInt64(0),UInt64(0),UInt64(0),legal_info)
     @assert length(logic.identify_locations(qmoves)) == 2
     @assert length(logic.identify_locations(amoves)) == 0
 end
@@ -487,7 +487,7 @@ if expensive
     leaves,Δt = test_speed()
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
-    #benchmarkspeed(leaves)
+    benchmarkspeed(leaves)
     #best = 1.235e7
 end
 
