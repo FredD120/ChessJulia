@@ -104,14 +104,27 @@ function test_legalinfo()
     simpleFEN = "K7/R7/8/8/8/8/8/r6b w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0)
+    ally_pcs = logic.BBunion(logic.ally_pieces(board))
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1)
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
-    #@assert info.
     @assert length(logic.identify_locations(info.blocks)) == 6 "list of squares to block bishop"
 end
 test_legalinfo()
+
+function testpins()
+    simpleFEN = "K7/R7/8/8/8/8/8/r6b w - - 0 1"
+    board = Boardstate(simpleFEN)    
+    all_pcs = logic.BBunion(board.pieces)
+    ally_pcs = logic.BBunion(logic.ally_pieces(board))
+    enemy = logic.enemy_pieces(board)
+
+    rookpins,bishoppins = detect_pins(0,enemy,all_pcs,ally_pcs)
+
+    @assert length(logic.identify_locations(rookpins)) == 8
+    @assert bishoppins == 0
+end
 
 function test_attckpcs()
     simpleFEN = "K6r/2n5/8/8/8/8/8/7b w - - 0 1"
@@ -132,26 +145,6 @@ function test_allposs()
     @assert attkBB == typemax(UInt64) "rooks are covering all squares"
 end
 test_allposs()
-
-function test_kingqatt()
-    simpleFEN = "8/8/8/8/8/8/8/8 w - - 0 1"
-    board = Boardstate(simpleFEN)
-    legal_info = logic.LegalInfo(0,0,0,0,0)
-    qmoves,amoves = logic.quietattacks(King(),UInt8(0),UInt64(0),UInt64(0),legal_info)
-    @assert length(logic.identify_locations(qmoves)) == 3
-    @assert length(logic.identify_locations(amoves)) == 0
-end
-test_kingqatt()
-
-function test_knightqatt()
-    simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
-    board = Boardstate(simpleFEN)
-    legal_info = logic.LegalInfo(typemax(UInt64),typemax(UInt64),0,0,0)
-    qmoves,amoves = logic.quietattacks(Knight(),UInt64(0),UInt64(0),UInt64(0),legal_info)
-    @assert length(logic.identify_locations(qmoves)) == 2
-    @assert length(logic.identify_locations(amoves)) == 0
-end
-test_knightqatt()
 
 function test_movegetters()
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
@@ -271,18 +264,6 @@ function test_capture()
 end
 test_capture()
 
-function test_attack_pcs()
-    basicFEN = "1k7/8/8/8/8/8/8/8 w KQkq - 0 1"
-    board = Boardstate(basicFEN)
-
-    attacks = logic.attack_pcs(logic.enemy_pieces(board),UInt64(0),0)
-    @assert attacks == UInt(2)
-
-    attacks = logic.attack_pcs(logic.enemy_pieces(board),UInt64(0),1)
-    @assert attacks == 0
-end
-test_attack_pcs()
-
 function test_legal()
     knightFEN = "K7/8/1nnn4/8/N7/8/8/8 w - 0 1"
     board = Boardstate(knightFEN)
@@ -292,27 +273,27 @@ function test_legal()
     @assert moves[1].capture_type > 0
     @assert moves[1].piece_type == val(Knight())
 
-    kingFEN = "Kkk5/8/1nnn4/8/N7/8/8/8 w - 0 1"
-    board = Boardstate(kingFEN)
-
-    moves = generate_moves(board)
-    @assert length(moves) == 0
-    @assert board.State == Loss()
-
-    "WKing stalemated in corner"
+    #WKing stalemated in corner
     slidingFEN = "K7/7r/8/8/8/8/8/1r4k1 w - 0 1"
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
     @assert length(moves) == 0 "White king not stalemated"
     @assert board.State == Draw()
 
-    "WKing checkmated by queen and 2 rooks, unless bishop blocks"
+    #WKing checkmated by queen and 2 rooks, unless bishop blocks
     slidingFEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
     @assert length(moves) == 1 "King moves backwards into check?"
     @assert board.State == Neutral()
     @assert moves[1].piece_type == val(Bishop())
+
+    #Wking is checkmated as bishop cannot capture rook because pinned by queen
+    slidingFEN = "K5Nr/8/8/3B4/8/8/r7/1r5q w - 0 1"
+    board = Boardstate(slidingFEN)
+    moves = generate_moves(board)
+    @assert length(moves) == 0 "White bishop cannot block"
+    @assert board.State == Loss()
 end
 test_legal()
 

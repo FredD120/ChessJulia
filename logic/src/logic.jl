@@ -329,7 +329,6 @@ end
 struct LegalInfo
     checks::UInt64
     blocks::UInt64
-    pins::UInt64
     attack_sqs::UInt64
     attack_num::UInt8
 end
@@ -347,12 +346,10 @@ possible_moves(::Queen,location,all_pcs) = sliding_attacks(RookMagics[location+1
 "Not yet implemented, but must only be attacking moves"
 possible_moves(::Pawn,location,all_pcs) = UInt64(0)
 
-"checks enemy pieces to see if any are attacking the current square, returns BB of attackers"
+"checks enemy pieces to see if any are attacking the king square, returns BB of attackers"
 function attack_pcs(pc_list::Vector{UInt64},all_pcs::UInt64,location::Integer)::UInt64
     attacks = UInt64(0)
-    kingmoves = possible_moves(King(),location,all_pcs)
-    attacks |= (kingmoves & pc_list[val(King())])
-
+    
     knightmoves = possible_moves(Knight(),location,all_pcs)
     attacks |= (knightmoves & pc_list[val(Knight())])
 
@@ -367,36 +364,6 @@ function attack_pcs(pc_list::Vector{UInt64},all_pcs::UInt64,location::Integer)::
     return attacks
 end
 
-"returns struct containing info on attacks, blocks and pins of king by enemy piecelist"
-function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position::Integer)::LegalInfo
-    attacks = attack_pcs(pc_list,all_pcs,position)
-    blocks = UInt64(0)
-    pins = UInt64(0)
-
-    attacker_num = count_ones(attacks)
-    #if only a single sliding piece is attacking the king, it can be blocked
-    if attacker_num == 1
-        for piece in [Rook(),Bishop()]
-            slide_attckers = attacks & (pc_list[val(piece)] | pc_list[val(Queen())])
-            for attack_pos in identify_locations(slide_attckers)
-                attackmoves = possible_moves(piece,attack_pos,all_pcs)
-                kingmoves = possible_moves(piece,position,all_pcs)
-                blocks = attackmoves & kingmoves
-            end
-        end
-    #if nothing is attacking the king, we can attack/move anywhere
-    elseif attacker_num == 0
-        attacks = typemax(UInt64)
-        blocks = typemax(UInt64)
-    end
-
-    #construct BB of all enemy attacks, must remove king when checking if square is attacked
-    all_except_king = all_pcs & ~(UInt64(1)<<position)
-    attacked_sqs = all_poss_moves(pc_list,all_except_king)
-
-    return LegalInfo(attacks,blocks,pins,attacked_sqs,attacker_num)
-end
-
 "Bitboard of all squares being attacked by a side"
 function all_poss_moves(pc_list::Vector{UInt64},all_pcs)
     attacks = UInt64(0)
@@ -409,42 +376,67 @@ function all_poss_moves(pc_list::Vector{UInt64},all_pcs)
     return attacks
 end
 
-"Bitboard containing only the attacks by a particular piece"
-function attack_moves(moveBB,enemy_pcs)
-    return moveBB & enemy_pcs
+"detect pins and create rook/bishop pin BBs"
+function detect_pins(pos,pc_list,all_pcs,ally_pcs)
+    #imagine king is a queen, what can it see?
+    slide_attacks = possible_moves(Queen(),pos,all_pcs)
+    #identify ally pieces seen by king
+    ally_block = slide_attacks & ally_pcs
+    #remove these ally pieces
+    blocks_removed = all_pcs & ~ally_block
+    #recalculate queen attacks with blockers removed
+    slide_no_blocks = possible_moves(Queen(),pos,blocks_removed) 
+    #only want moves found after removing blockers
+    pin_attacks = slide_no_blocks & ~slide_attacks
+
+    rookpins = pin_attacks & (pc_list[val(Rook())] | pc_list[val(Queen())])
+    #iterate through rooks/queens pinning king
+    for loc in identify_locations(rookpins)
+        #add squares on pin line to pinning BB
+        rookpins |= slide_no_blocks & possible_moves(Rook(),loc,blocks_removed)
+    end
+
+    bishoppins = pin_attacks & (pc_list[val(Bishop())] | pc_list[val(Queen())])
+    #iterate through bishops/queens pinning king
+    for loc in identify_locations(bishoppins)
+        #add squares on pin line to pinning BB
+        bishoppins |= slide_no_blocks & possible_moves(Bishop(),loc,blocks_removed)
+    end
+
+    return rookpins,bishoppins
 end
 
-"Bitboard containing only the quiets by a particular piece"
-function quiet_moves(moveBB,all_pcs)
-    return moveBB & ~all_pcs
-end
+"returns struct containing info on attacks, blocks and pins of king by enemy piecelist"
+function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB)::LegalInfo
+ 
+    attacks = typemax(UInt64)
+    blocks = UInt64(0)
+    attacker_num = 0
 
-"returns attack and quiets moves for king only if legal, based on checks, pins etc"
-function quietattacks(piece::King,location,enemy_pcs,all_pcs,info::LegalInfo)
-    poss_moves = possible_moves(piece,location,all_pcs)
-    #king can't move into check
-    legal_moves = poss_moves & ~info.attack_sqs
+    #construct BB of all enemy attacks, must remove king when checking if square is attacked
+    all_except_king = all_pcs & ~(KingBB)
+    attacked_sqs = all_poss_moves(pc_list,all_except_king)
 
-    attacks = attack_moves(legal_moves,enemy_pcs)
-    quiets = quiet_moves(legal_moves,all_pcs)
-    return quiets,attacks
-end
-
-"returns attack and quiets moves for non-king pieces only if legal"
-function quietattacks(piece::Union{Queen,Rook,Bishop,Knight},location,enemy_pcs,all_pcs,info::LegalInfo)
-    poss_moves = possible_moves(piece,location,all_pcs)
-    attacks = attack_moves(poss_moves,enemy_pcs)
-    quiets = quiet_moves(poss_moves,all_pcs)
-
-    legal_attacks = attacks & info.checks
-    legal_quiets = quiets & info.blocks
-
-    return legal_quiets,legal_attacks
-end
-
-"not yet implemented"
-function quietattacks(piece::Pawn,location,enemy_pcs,all_pcs,info::LegalInfo)
-    return UInt64(0),UInt64(0)
+    #if king not under attack, dont need to find attacking pieces or blockers
+    if KingBB & attacked_sqs == 0 
+        blocks = typemax(UInt64)
+    else
+        attacks = attack_pcs(pc_list,all_pcs,position)
+        attacker_num = count_ones(attacks)
+        #if only a single sliding piece is attacking the king, it can be blocked
+        if attacker_num == 1
+            for piece in [Rook(),Bishop()]
+                slide_attckers = attacks & (pc_list[val(piece)] | pc_list[val(Queen())])
+                for attack_pos in identify_locations(slide_attckers)
+                    attackmoves = possible_moves(piece,attack_pos,all_pcs)
+                    kingmoves = possible_moves(piece,position,all_pcs)
+                    blocks = attackmoves & kingmoves
+                end
+            end
+        end
+    end
+    
+    return LegalInfo(attacks,blocks,attacked_sqs,attacker_num)
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
@@ -462,6 +454,105 @@ function moves_from_location(type::UInt8,enemy_pcs::Vector{UInt64},destinations:
     return moves
 end
 
+"Bitboard containing only the attacks by a particular piece"
+function attack_moves(moveBB,enemy_pcs)
+    return moveBB & enemy_pcs
+end
+
+"Bitboard containing only the quiets by a particular piece"
+function quiet_moves(moveBB,all_pcs)
+    return moveBB & ~all_pcs
+end
+
+"Filter possible moves for legality for King"
+function legal_moves(piece::King,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    poss_moves = possible_moves(piece,loc,all_pcs)
+    #Filter out moves that put king in check
+    legal_moves = poss_moves & ~info.attack_sqs
+    return legal_moves
+end
+
+"Filter possible moves for legality for Knight"
+function legal_moves(piece::Knight,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    poss_moves = possible_moves(piece,loc,all_pcs)
+    #Filter out knight moves that don't block/capture if in check/pinned
+    legal_moves = poss_moves & (info.checks | info.blocks) 
+    return legal_moves
+end
+
+"Filter possible moves for legality for Bishop"
+function legal_moves(piece::Bishop,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    poss_moves = possible_moves(piece,loc,all_pcs)
+    #Filter out bishop moves that don't block/capture if in check/pinned
+    legal_moves = poss_moves & (info.checks | info.blocks) & bishoppins
+    return legal_moves
+end
+
+"Filter possible moves for legality for Rook"
+function legal_moves(piece::Rook,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    poss_moves = possible_moves(piece,loc,all_pcs)
+    #Filter out rook moves that don't block/capture if in check/pinned
+    legal_moves = poss_moves & (info.checks | info.blocks) & rookpins
+    return legal_moves
+end
+
+"Filter possible moves for legality for Queen"
+function legal_moves(::Queen,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    legal_rook = legal_moves(Rook(),loc,all_pcs,rookpins,bishoppins,info)
+    legal_bishop = legal_moves(Bishop(),loc,all_pcs,rookpins,bishoppins,info)
+    return legal_rook | legal_bishop
+end
+
+"Bitboard logic to get attacks and quiets for non-pawns"
+function QAtt(piece::Union{King,Knight,Bishop,Rook,Queen},loc,all_pcs,enemy_pcs,rookpins,bishoppins,info::LegalInfo)
+    legal = legal_moves(piece,loc,all_pcs,rookpins,bishoppins,info)
+
+    attacks = attack_moves(legal,enemy_pcs)
+    quiets = quiet_moves(legal,all_pcs)
+    return quiets,attacks
+end
+
+"King cannot be pinned, knight cannot move if pinned"
+pinned(::Union{King,Knight},pieceBB,rookpins,bishoppins) = UInt64(0)
+
+"Bishop can only move if pinned diagonally"
+pinned(::Bishop,pieceBB,rookpins,bishoppins) = pieceBB & bishoppins
+
+"Rook can only move if pinned vertic/horizontally"
+pinned(::Rook,pieceBB,rookpins,bishoppins) = pieceBB & rookpins
+
+"Queen may move in any pin"
+pinned(::Queen,pieceBB,rookpins,bishoppins) = pieceBB & (rookpins | bishoppins)
+
+"Placeholder"
+pinned(::Pawn,pieceBB,rookpins,bishoppins) = UInt64(0)
+
+"returns attack and quiet moves only if legal, based on checks and pins"
+function get_moves(piece,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    moves = Vector{Move}()
+
+    #split into pinned and unpinned pieces, then run movegetter seperately on each
+    unpinnedBB = pieceBB & ~(rookpins | bishoppins)
+    pinnedBB = pinned(piece,pieceBB,rookpins,bishoppins)
+
+    for (BB,rpins,bpins) in zip([pinnedBB,unpinnedBB],[rookpins,typemax(UInt64)],[bishoppins,typemax(UInt64)])
+        for loc in identify_locations(BB)
+            quiets,attacks = QAtt(piece,loc,all_pcs,enemy_pcs,rpins,bpins,info)
+
+            quiet_moves = moves_from_location(val(piece),enemy_vec,quiets,loc,false)
+            attack_moves = moves_from_location(val(piece),enemy_vec,attacks,loc,true)
+        
+            moves = vcat(moves,quiet_moves,attack_moves)
+        end
+    end
+    return moves
+end
+
+"returns attack and quiet moves for pawns only if legal, based on checks and pins"
+function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+    return []
+end
+
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate)::Vector{Move}
     movelist = Vector{Move}()
@@ -474,22 +565,18 @@ function generate_moves(board::Boardstate)::Vector{Move}
     enemy = enemy_pieces(board)
     enemy_pcsBB = BBunion(enemy)
     all_pcsBB = BBunion(board.pieces)
-
+    ally_pcsBB = all_pcsBB & ~enemy_pcsBB
+    
     kingpos = identify_locations(ally[val(King())])[1]
-    legal_info = attack_info(enemy,all_pcsBB,kingpos)
+    rookpins,bishoppins = detect_pins(kingpos,enemy,all_pcsBB,ally_pcsBB)
+    legal_info = attack_info(enemy,all_pcsBB,kingpos,ally[val(King())])
 
+    #run through pieces and BBs, adding moves to list
     for (type,pieceBB) in zip(piecetypes,ally)
-        loc_list = identify_locations(pieceBB)
-        for loc in loc_list
-            quiets,attacks = quietattacks(type,loc,enemy_pcsBB,all_pcsBB,legal_info)
-
-            quiet_moves = moves_from_location(val(type),enemy,quiets,loc,false)
-            attack_moves = moves_from_location(val(type),enemy,attacks,loc,true)
-
-            movelist = vcat(movelist,quiet_moves)
-            movelist = vcat(movelist,attack_moves)
-        end
-
+        piece_moves = get_moves(type,pieceBB,enemy,
+        enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+        movelist = vcat(movelist,piece_moves)
+        
         #if multiple checks on king, only king can move
         if legal_info.attack_num > 1
             break
