@@ -30,6 +30,13 @@ val(::Bishop) = UInt8(4)
 val(::Knight) = UInt8(5)
 val(::Pawn) = UInt8(6)
 
+Base.string(::King) = "King"
+Base.string(::Queen) = "Queen"
+Base.string(::Rook) = "Rook"
+Base.string(::Bishop) = "Bishop"
+Base.string(::Knight) = "Knight"
+Base.string(::Pawn) = "Pawn"
+
 const ZobristKeys = rand(rng,UInt64,12*64)
 
 struct Move
@@ -349,7 +356,6 @@ possible_moves(::Pawn,location,all_pcs) = UInt64(0)
 "checks enemy pieces to see if any are attacking the king square, returns BB of attackers"
 function attack_pcs(pc_list::Vector{UInt64},all_pcs::UInt64,location::Integer)::UInt64
     attacks = UInt64(0)
-    
     knightmoves = possible_moves(Knight(),location,all_pcs)
     attacks |= (knightmoves & pc_list[val(Knight())])
 
@@ -384,23 +390,25 @@ function detect_pins(pos,pc_list,all_pcs,ally_pcs)
     ally_block = slide_attacks & ally_pcs
     #remove these ally pieces
     blocks_removed = all_pcs & ~ally_block
-    #recalculate queen attacks with blockers removed
-    slide_no_blocks = possible_moves(Queen(),pos,blocks_removed) 
-    #only want moves found after removing blockers
-    pin_attacks = slide_no_blocks & ~slide_attacks
 
-    rookpins = pin_attacks & (pc_list[val(Rook())] | pc_list[val(Queen())])
+    #recalculate rook attacks with blockers removed
+    rook_no_blocks = possible_moves(Rook(),pos,blocks_removed) 
+    #only want moves found after removing blockers
+    rpin_attacks = rook_no_blocks & ~slide_attacks
+    #start by adding attacker to pin line
+    rookpins = rpin_attacks & (pc_list[val(Rook())] | pc_list[val(Queen())])
     #iterate through rooks/queens pinning king
     for loc in identify_locations(rookpins)
         #add squares on pin line to pinning BB
-        rookpins |= slide_no_blocks & possible_moves(Rook(),loc,blocks_removed)
+        rookpins |= rook_no_blocks & possible_moves(Rook(),loc,blocks_removed)
     end
 
-    bishoppins = pin_attacks & (pc_list[val(Bishop())] | pc_list[val(Queen())])
-    #iterate through bishops/queens pinning king
+    #same but for bishops
+    bishop_no_blocks = possible_moves(Bishop(),pos,blocks_removed) 
+    bpin_attacks = bishop_no_blocks & ~slide_attacks
+    bishoppins = bpin_attacks & (pc_list[val(Bishop())] | pc_list[val(Queen())])
     for loc in identify_locations(bishoppins)
-        #add squares on pin line to pinning BB
-        bishoppins |= slide_no_blocks & possible_moves(Bishop(),loc,blocks_removed)
+        bishoppins |= bishop_no_blocks & possible_moves(Bishop(),loc,blocks_removed)
     end
 
     return rookpins,bishoppins
@@ -408,7 +416,6 @@ end
 
 "returns struct containing info on attacks, blocks and pins of king by enemy piecelist"
 function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB)::LegalInfo
- 
     attacks = typemax(UInt64)
     blocks = UInt64(0)
     attacker_num = 0
@@ -418,7 +425,7 @@ function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB)::L
     attacked_sqs = all_poss_moves(pc_list,all_except_king)
 
     #if king not under attack, dont need to find attacking pieces or blockers
-    if KingBB & attacked_sqs == 0 
+    if KingBB & attacked_sqs == UInt64(0) 
         blocks = typemax(UInt64)
     else
         attacks = attack_pcs(pc_list,all_pcs,position)
@@ -426,11 +433,11 @@ function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB)::L
         #if only a single sliding piece is attacking the king, it can be blocked
         if attacker_num == 1
             for piece in [Rook(),Bishop()]
-                slide_attckers = attacks & (pc_list[val(piece)] | pc_list[val(Queen())])
+                kingmoves = possible_moves(piece,position,all_pcs)
+                slide_attckers = kingmoves & (pc_list[val(piece)] | pc_list[val(Queen())])
                 for attack_pos in identify_locations(slide_attckers)
                     attackmoves = possible_moves(piece,attack_pos,all_pcs)
-                    kingmoves = possible_moves(piece,position,all_pcs)
-                    blocks = attackmoves & kingmoves
+                    blocks |= attackmoves & kingmoves
                 end
             end
         end

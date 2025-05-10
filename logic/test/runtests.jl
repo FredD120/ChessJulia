@@ -2,6 +2,7 @@ using logic
 using BenchmarkTools
 
 const expensive = true
+const verbose = false
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -101,15 +102,30 @@ end
 test_movfromloc()
 
 function test_legalinfo()
-    simpleFEN = "K7/R7/8/8/8/8/8/r6b w - - 0 1"
+    simpleFEN = "K7/R7/8/8/8/8/8/r6q w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    ally_pcs = logic.BBunion(logic.ally_pieces(board))
     info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1)
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
-    @assert length(logic.identify_locations(info.blocks)) == 6 "list of squares to block bishop"
+    @assert length(logic.identify_locations(info.blocks)) == 6 "6 squares blocking bishop"
+
+    simpleFEN = "K7/7R/8/8/8/8/8/qq6 w - - 0 1"
+    board = Boardstate(simpleFEN)    
+    all_pcs = logic.BBunion(board.pieces)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1)
+    @assert length(logic.identify_locations(info.blocks)) == 6 "6 squares blocking queen attack"
+
+    simpleFEN = "4k3/8/8/8/4q3/8/4B3/1Q2K3 w - 0 1"
+    board = Boardstate(simpleFEN)  
+    all_pcs = logic.BBunion(board.pieces)
+    kingBB = logic.ally_pieces(board)[val(King())]
+    kingpos = logic.identify_locations(kingBB)[1]
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB)
+
+    @assert info.blocks == typemax(UInt64)
+    @assert info.checks == typemax(UInt64)
 end
 test_legalinfo()
 
@@ -120,11 +136,24 @@ function testpins()
     ally_pcs = logic.BBunion(logic.ally_pieces(board))
     enemy = logic.enemy_pieces(board)
 
-    rookpins,bishoppins = detect_pins(0,enemy,all_pcs,ally_pcs)
+    rookpins,bishoppins = logic.detect_pins(0,enemy,all_pcs,ally_pcs)
 
-    @assert length(logic.identify_locations(rookpins)) == 8
+    @assert length(logic.identify_locations(rookpins)) == 7
+    @assert bishoppins == 0
+
+    simpleFEN = "4k3/8/8/8/4b3/8/4B3/1Q2K3 w - 0 1"
+    board = Boardstate(simpleFEN)    
+    all_pcs = logic.BBunion(board.pieces)
+    ally_pcs = logic.BBunion(logic.ally_pieces(board))
+    enemy = logic.enemy_pieces(board)
+    kingBB = logic.ally_pieces(board)[val(King())]
+    kingpos = logic.identify_locations(kingBB)[1]
+
+    rookpins,bishoppins = logic.detect_pins(kingpos,enemy,all_pcs,ally_pcs)
+    @assert rookpins == 0
     @assert bishoppins == 0
 end
+testpins()
 
 function test_attckpcs()
     simpleFEN = "K6r/2n5/8/8/8/8/8/7b w - - 0 1"
@@ -294,6 +323,12 @@ function test_legal()
     moves = generate_moves(board)
     @assert length(moves) == 0 "White bishop cannot block"
     @assert board.State == Loss()
+
+    #Only legal move is to block with rook
+    slidingFEN = "K5Nr/8/8/3B4/7R/8/q7/1r5q w - 0 1"
+    board = Boardstate(slidingFEN)
+    moves = generate_moves(board)
+    @assert length(moves) == 1 "White rook must block"
 end
 test_legal()
 
@@ -443,13 +478,29 @@ end
 test_perft()
 
 function test_speed()
-    FEN = "nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1"
-    board = Boardstate(FEN)
+    FENs = ["nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1",
+    "bbbqknbq/8/8/8/8/8/8/QNNNKBBQ w - 0 1"]
+    Depths = [5,4]
+    Targets = [11813050,7466475]
+    Δt = 0
+    leaves = 0
 
-    t = time()
-    leaves = perft(board,5)
-    @assert leaves == 11813050
-    Δt = time() - t
+    for (FEN,depth,target) in zip(FENs,Depths,Targets)
+        board = Boardstate(FEN)
+        if verbose
+            println("Testing position: $FEN")
+        end
+        t = time()
+        cur_leaves = perft(board,depth,verbose)
+        Δt += time() - t
+        leaves += cur_leaves
+
+        if target == 0
+            println(cur_leaves)
+        else
+            @assert cur_leaves == target
+        end
+    end
     return leaves,Δt
 end
 
@@ -468,7 +519,7 @@ if expensive
     leaves,Δt = test_speed()
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
-    benchmarkspeed(leaves)
+    #benchmarkspeed(leaves)
     #best = 1.235e7
 end
 
