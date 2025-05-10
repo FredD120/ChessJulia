@@ -61,13 +61,16 @@ end
 struct Move_BB
     king::Vector{UInt64}
     knight::Vector{UInt64}
+    CRightsMask::Vector{UInt8}
+    #CastleMask::Vector{UInt64}
 end
 
 "constructor for Move_BB that reads all moves from txt files"
 function Move_BB()
     king_mvs = read_txt("king")
     knight_mvs = read_txt("knight")
-    return Move_BB(king_mvs,knight_mvs)
+    Crights = [0x03,0x0C]
+    return Move_BB(king_mvs,knight_mvs,Crights)
 end
 
 const moveset = Move_BB()
@@ -124,7 +127,7 @@ const GameState = Union{Neutral,Loss,Draw}
 
 mutable struct BoardData
     Halfmoves::Vector{UInt8}
-    Castling::Vector{UInt64}
+    Castling::Vector{UInt8}
     CastleCount::Vector{UInt8}
     EnPassant::Vector{UInt64}
     EPCount::Vector{UInt8}
@@ -134,6 +137,8 @@ end
 mutable struct Boardstate
     pieces::Vector{UInt64}
     ColourIndex::UInt8
+    Castle::UInt8
+    EnPass::UInt64
     State::GameState
     ZHash::UInt64
     MoveHist::Vector{Move}
@@ -170,6 +175,12 @@ function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UIn
     return ID
 end
 
+function get_Crights(ColourID,castling)
+    index = ColourID % 5
+    castlerights = castling & moveset.CRightsMask[index+1]
+    return castlerights >> (2*index)
+end
+
 "Helper function when constructing a boardstate"
 function place_piece!(pieces::Vector{UInt64},pieceID,pos)
     pieces[pieceID] = setone(pieces[pieceID],pos)
@@ -185,7 +196,7 @@ function generate_hash(pieces,Whitesmove,castling,enpassant)
     end
 
     #the rest of this data is packed in using the fact that neither
-    #black or white pawns will exist on first or last rank
+    #black nor white pawns will exist on first or last rank
     for EP in identify_locations(enpassant)
         file = EP % 8
         #use first rank of black pawns
@@ -254,14 +265,14 @@ function Boardstate(FEN)
             end
         #castling rights
         elseif num_spaces == 2
-            if c == 'K'
-                Castling = setone(Castling,62)
-            elseif c == 'Q'
-                Castling = setone(Castling,58)
-            elseif c == 'k'
-                Castling = setone(Castling,6)
-            elseif c == 'q'
-                Castling = setone(Castling,2)
+            if isletter(c)
+                C = uppercase(c)
+                add = C==c ? 0 : 2
+                if C == 'K'
+                    Castling = setone(Castling,0+add)
+                elseif C == 'Q'
+                    Castling = setone(Castling,1+add)
+                end
             end
         #en-passant
         elseif num_spaces == 3
@@ -280,11 +291,11 @@ function Boardstate(FEN)
 
     Zobrist = generate_hash(pieces,Whitesmove(ColourIndex),Castling,EnPassant)
     data = BoardData(Vector{UInt8}([Halfmoves]),
-                     Vector{UInt64}([Castling]),Vector{UInt8}([0]),
+                     Vector{UInt8}([Castling]),Vector{UInt8}([0]),
                      Vector{UInt64}([EnPassant]),Vector{UInt8}([0]),
                      Vector{UInt64}([Zobrist]))
 
-    Boardstate(pieces,ColourIndex,Neutral(),Zobrist,MoveHistory,data)
+    Boardstate(pieces,ColourIndex,Castling,EnPassant,Neutral(),Zobrist,MoveHistory,data)
 end
 
 "convert a position from number 0-63 to rank/file notation"
