@@ -176,7 +176,7 @@ end
 test_allposs()
 
 function test_movegetters()
-    simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
+    simpleFEN = "8/8/4nK2/8/8/8/8/8 w - - 0 1"
     board = Boardstate(simpleFEN)
     moves = generate_moves(board)
 
@@ -192,7 +192,7 @@ function test_movegetters()
     @assert attks == 1
     @assert quiets == 5
 
-    simpleFEN = "8/8/4nK2/8/8/8/8/8 w KQkq - 0 1"
+    simpleFEN = "8/8/4nK2/8/8/8/8/8 w - - 0 1"
     board = Boardstate(simpleFEN)
     board.Data.Halfmoves[end] = 100
     moves = generate_moves(board)
@@ -203,7 +203,7 @@ test_movegetters()
 
 function test_makemove()
     #Test making a move with only one piece on the board
-    basicFEN = "K7/8/8/8/8/8/8/8 w KQkq - 0 1"
+    basicFEN = "K7/8/8/8/8/8/8/8 w - - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
 
@@ -234,7 +234,7 @@ function test_makemove()
     @assert length(generate_moves(board)) == 6
 
     #Test a black move
-    basicFEN = "1n6/K7/8/8/8/8/8/7k b KQkq - 0 1"
+    basicFEN = "1n6/K7/8/8/8/8/8/7k b - - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
     @assert Whitesmove(board.ColourIndex) == false
@@ -250,7 +250,7 @@ function test_makemove()
     @assert GUI[12] == 11
 
     #Test 3 pieces on the board
-    basicFEN = "k7/8/8/8/8/8/8/NNN4K w KQkq - 0 1"
+    basicFEN = "k7/8/8/8/8/8/8/NNN4K w - - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
     @assert length(moves) == 12
@@ -270,7 +270,7 @@ test_makemove()
 
 function test_capture()
     #WKing captures BKnight
-    basicFEN = "Kn6/8/8/8/8/8/8/7k w KQkq - 0 1"
+    basicFEN = "Kn6/8/8/8/8/8/8/7k w - - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
 
@@ -333,7 +333,7 @@ end
 test_legal()
 
 function test_identifyID()
-    basicFEN = "1N7/8/8/8/8/8/8/8 w KQkq - 0 1"
+    basicFEN = "1N7/8/8/8/8/8/8/8 w - - 0 1"
     board = Boardstate(basicFEN)
     ID = logic.identify_piecetype(logic.ally_pieces(board),1)
     @assert ID == 5
@@ -345,7 +345,7 @@ test_identifyID()
 
 function test_unmake()
     #WKing captures BKnight then unmake
-    basicFEN = "Kn6/8/8/8/8/8/8/7k w KQkq - 0 1"
+    basicFEN = "Kn6/8/8/8/8/8/8/7k w - - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
 
@@ -394,7 +394,7 @@ end
 test_unmake()
 
 function test_repetition()
-    basicFEN = "K7/8/8/8/8/8/8/7k w KQkq - 0 1"
+    basicFEN = "K7/8/8/8/8/8/8/7k w - - 0 1"
     board = Boardstate(basicFEN)
 
     for i in 1:8
@@ -424,7 +424,7 @@ function test_UCI()
     str2 = logic.UCIpos(63)
     @assert (str1 == "a8") & (str2 == "h1")
 
-    move = Move(1,2,54,0)
+    move = Move(1,2,54,0,0)
     mvstr = UCImove(move)
     @assert mvstr == "c8g2"
 end
@@ -487,7 +487,7 @@ end
 test_Zobrist()
 
 function test_perft()
-    basicFEN = "K7/8/8/8/8/8/8/7k w KQkq - 0 1"
+    basicFEN = "K7/8/8/8/8/8/8/7k w - - 0 1"
     board = Boardstate(basicFEN)
 
     leaves = perft(board,2)

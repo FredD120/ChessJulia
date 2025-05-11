@@ -41,7 +41,7 @@ const ZobristKeys = rand(rng,UInt64,12*64+9)
 
 const NOFLAG = UInt8(0)
 const KCASTLE = UInt8(1)
-const QCASTLE = UInt8(2)
+const QCASTLE = KCASTLE + 1
 const EPFLAG = UInt8(3)
 const PROMOTE = UInt8(4)
 
@@ -468,10 +468,11 @@ end
 
 "create a castling move where from and to is the rook to move"
 function create_castle(KorQ,WorB)
-    #KorQ is 1 if queenside, 0 if kingside 
+    #KorQ is 0 if kingside, 1 if queenside 
     #WorB is 0 if white, 1 if black
-    
-
+    from = UInt8(63 - 7*KorQ - WorB*56)
+    to = from - 2 + 5*KorQ
+    return Move(val(King()),from,to,NULL_PIECE,KCASTLE+KorQ)
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
@@ -657,7 +658,7 @@ function get_moves(piece::King,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     if info.attack_num == 0
         #index into lookup table containing squares that must be free/not in check to castle
         for castleID in identify_locations(get_Crights(colID,castlrts))
-            castlecheck = moveset.CastleCheck[castleID]
+            castlecheck = moveset.CastleCheck[castleID+1]
             if (castlecheck & all_pcs == 0) & (castlecheck & info.attack_sqs == 0)
                 push!(moves,create_castle(castleID%2,colID))
             end
