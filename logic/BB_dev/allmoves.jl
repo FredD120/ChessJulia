@@ -1,4 +1,4 @@
-using JLD2
+#using JLD2
 using logic
 
 "converts a single board sqaure to a bitboard"
@@ -358,9 +358,28 @@ function make_magic(piece)
     println("Original dict size ≈ $(dict_length*8) bytes. Magic array size ≈ $(array_length*8) bytes.")
     jldsave("$(pwd())/logic/move_BBs/Magic$(piece)s.jld2",Masks=masks,Magics=magics,BitShifts=magic_shifts,AttackVec=magic_arrays)
 end
-make_magic("Bishop")
+#make_magic("Bishop")
 
 function get_magic(piece,pos)
     dict,mask = sliding_move_BBs(pos,piece)
     println(find_magic(dict))
 end
+
+### Castling BBs ###
+
+function make_castle_blockers()
+    Kwhite = (UInt64(1) << 61) | (UInt64(1) << 62) 
+    Qwhite = (UInt64(1) << 58) | (UInt64(1) << 59) 
+    Kblack = (UInt64(1) << 5) | (UInt64(1) << 6) 
+    Qblack = (UInt64(1) << 2) | (UInt64(1) << 3) 
+    return [Kwhite,Qwhite,Kblack,Qblack]
+end
+
+function save_castle()
+    castlers = make_castle_blockers()
+    for C in castlers
+        println(bitstring(C))
+    end
+    save_data(castlers,"CastleCheck.txt")
+end
+save_castle()

@@ -452,19 +452,37 @@ test_sliding()
 
 function test_Zobrist()
     board = Boardstate(FEN)
-    @assert board.ZHash == 3988342487599293876
-
     moves = generate_moves(board)
     for move in moves
        if (move.from == 57) & (move.to == 40)
         make_move!(move,board)
        end
     end
-    @assert board.Data.ZHashHist[1] == 3988342487599293876
 
     newFEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
     newboard = Boardstate(newFEN)
     @assert board.ZHash == newboard.ZHash
+
+    #should end up back at start position
+    moves = generate_moves(board)
+    for move in moves
+       if (move.from == 1) & (move.to == 16)
+        make_move!(move,board)
+       end
+    end
+    moves = generate_moves(board)
+    for move in moves
+       if (move.from == 40) & (move.to == 57)
+        make_move!(move,board)
+       end
+    end
+    moves = generate_moves(board)
+    for move in moves
+       if (move.from == 16) & (move.to == 1)
+        make_move!(move,board)
+       end
+    end
+    @assert board.ZHash == board.Data.ZHashHist[1] "Zhash should be identical to start pos"
 end
 test_Zobrist()
 
