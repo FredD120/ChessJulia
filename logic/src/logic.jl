@@ -2,7 +2,8 @@ module logic
 
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
-King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val
+King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val,
+NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMOTE, ally_pieces, enemy_pieces
 
 using InteractiveUtils
 using JLD2
@@ -53,7 +54,7 @@ struct Move
     flag::UInt8
 end
 
-Base.show(io::IO,m::Move) = print(io,"From=$(Int(m.from));To=$(Int(m.to));PieceId=$(Int(m.piece_type));Capture ID=$(Int(m.capture_type))")
+Base.show(io::IO,m::Move) = print(io,"From=$(Int(m.from));To=$(Int(m.to));PieceId=$(Int(m.piece_type));Capture ID=$(Int(m.capture_type));Flag=$(Int(m.flag))")
 
 "take in all possible moves for a given piece from a txt file"
 function read_txt(filename)
@@ -76,7 +77,7 @@ end
 function Move_BB()
     king_mvs = read_txt("king")
     knight_mvs = read_txt("knight")
-    Crights = [0x03,0x0C]
+    Crights = [0b0011,0b1011,0b0111,0b1100,0b1110,0b1101]
     castle_check = read_txt("CastleCheck")
     return Move_BB(king_mvs,knight_mvs,Crights,castle_check)
 end
@@ -316,9 +317,11 @@ function UCImove(move::Move)
 end
 
 "Masked 4-bit integer representing king- and queen-side castling rights for one side"
-function get_Crights(ColID,castling)
+function get_Crights(castling,ColID,KorQside)
     #ColID must be 0 for white and 1 for black
-    return castling & moveset.CRightsMask[ColID+1]
+    #KorQside allows masking out of only king/queen side
+    #for a given colour, =0 if both, 1 = king, 2 = queen
+    return castling & moveset.CRightsMask[3*ColID+KorQside+1]
 end
 
 "Returns a single bitboard representing the positions of an array of pieces"
@@ -657,7 +660,8 @@ function get_moves(piece::King,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     #cannot castle out of check
     if info.attack_num == 0
         #index into lookup table containing squares that must be free/not in check to castle
-        for castleID in identify_locations(get_Crights(colID,castlrts))
+        #must mask out opponent's castle rights
+        for castleID in identify_locations(get_Crights(castlrts,colID,0))
             castlecheck = moveset.CastleCheck[castleID+1]
             if (castlecheck & all_pcs == 0) & (castlecheck & info.attack_sqs == 0)
                 push!(moves,create_castle(castleID%2,colID))
@@ -740,15 +744,55 @@ function swap_player!(board)
     board.ZHash ⊻= ZobristKeys[end]
 end
 
+"make a kingside castle"
+function Kcastle!(B::Boardstate)
+    kingpos = trailing_zeros(ally_pieces(B)[val(King())])
+    CpieceID = B.ColourIndex + val(King())
+    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+1]
+    B.pieces[CpieceID] = B.pieces[CpieceID] >> 2
+    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+3]
+end 
+
+"make a queenside castle"
+function Qcastle!(B::Boardstate)
+    kingpos = trailing_zeros(ally_pieces(B)[val(King())])
+    CpieceID = B.ColourIndex + val(King())
+    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+1]
+    B.pieces[CpieceID] = B.pieces[CpieceID] << 2
+    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos-1]
+end
+
+"update castling rights and Zhash"
+function updateCrights!(board,side)
+    #remove ally castling rights by &-ing with opponent mask
+    #side is king=1, queen=2, both=0
+    ColId = ColID(Opposite(board.ColourIndex))
+    Zhashcastle!(board.ZHash,board.castle)
+    board.Castle = get_Crights(board.Castle,ColId,side)
+    Zhashcastle!(board.ZHash,board.castle)
+end
+
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist"
 function make_move!(move::Move,board::Boardstate)
-    move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
+    if move.flag == NOFLAG 
+        move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
 
-    if move.capture_type > 0
-        destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
-        push!(board.Data.Halfmoves,0)
-    else
-        board.Data.Halfmoves[end] += 1
+        if move.capture_type > 0
+            destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
+            push!(board.Data.Halfmoves,0)
+        else
+            board.Data.Halfmoves[end] += 1
+        end
+
+    elseif (move.flag == KCASTLE) | (move.flag == QCASTLE)
+        rookID = board.ColourIndex + val(Rook())
+        move_piece!(board,rookID,move.from,move.to)
+        updateCrights!(board,side)
+        if move.flag == KCASTLE
+            Kcastle!(board)
+        else
+            Qcastle!(board)
+        end
     end
     swap_player!(board)
     push!(board.MoveHist,move)

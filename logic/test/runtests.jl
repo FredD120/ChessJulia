@@ -1,7 +1,7 @@
 using logic
 using BenchmarkTools
 
-const expensive = true
+const expensive = false
 const verbose = false
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -154,6 +154,25 @@ function testpins()
     @assert bishoppins == 0
 end
 testpins()
+
+function test_castle()
+    cFEN = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
+    board = Boardstate(cFEN)
+    moves = generate_moves(board)
+
+    Kcount = 0
+    Qcount = 0
+    for m in moves 
+        if m.flag == KCASTLE
+            Kcount +=1
+        elseif m.flag == QCASTLE
+            Qcount +=1
+        end
+    end
+    @assert Kcount == 1
+    @assert Qcount == 1
+end
+test_castle()
 
 function test_attckpcs()
     simpleFEN = "K6r/2n5/8/8/8/8/8/7b w - - 0 1"

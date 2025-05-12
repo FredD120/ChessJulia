@@ -138,27 +138,36 @@ function render_pieces(renderer,piece_width,position,tex_vec)
 end
 
 "update gui based on mouse click to indicate legal moves"
-function mouse_clicked(mouse_pos,legal_moves,DEBUG)
-    if DEBUG
-        all_moves = logic.Move_BB()
-        piecemoves = all_moves.king[mouse_pos+1]
-        return logic.identify_locations(piecemoves)
-    else
-        highlight = []
-        for move in legal_moves
-            if move.from == mouse_pos
-                push!(highlight,move.to)
+function mouse_clicked(mouse_pos,legal_moves,kingpos)
+    highlight = []
+    for move in legal_moves
+        if (move.flag == KCASTLE) | (move.flag == QCASTLE)
+            if kingpos == mouse_pos
+                if move.flag == KCASTLE
+                    push!(highlight,kingpos+2)
+                else
+                    push!(highlight,kingpos-2)
+                end
             end
+        elseif move.from == mouse_pos
+            push!(highlight,move.to)
         end
-        return highlight
     end
+    return highlight
 end
 
 "update logic with move made"
-function move_clicked!(move_from,mouse_pos,legal_moves,logicstate)
+function move_clicked!(move_from,mouse_pos,kingpos,legal_moves,logicstate)
     for move in legal_moves
         if (move.to == mouse_pos) & (move.from == move_from)
             make_move!(move,logicstate)
+        #check for castling moves
+        elseif move_from == kingpos
+            if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
+                make_move!(move,logicstate)
+            elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
+                make_move!(move,logicstate)
+            end
         end
     end
 end
@@ -196,11 +205,12 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                     xpos = getproperty(mouse_evt,:x)
                     ypos = getproperty(mouse_evt,:y)
                     mouse_pos = board_coords(xpos,ypos,square_width)
+                    kingpos = trailing_zeros(ally_pieces(logicstate)[val(King())])
 
                     if (length(highlight_moves) > 0) & !DEBUG
                         if mouse_pos in highlight_moves
                             #make move in logic then update GUI to reflect new board
-                            move_clicked!(sq_clicked,mouse_pos,legal_moves,logicstate)
+                            move_clicked!(sq_clicked,mouse_pos,kingpos,legal_moves,logicstate)
                             #update positions of pieces in GUI representation
                             position = GUIposition(logicstate)
                             #generate new set of moves
@@ -210,7 +220,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                         highlight_moves = []
                         sq_clicked = -1
                     else
-                        highlight_moves = mouse_clicked(mouse_pos,legal_moves,DEBUG)
+                        highlight_moves = mouse_clicked(mouse_pos,legal_moves,kingpos)
                         sq_clicked = mouse_pos
                     end
                     if logicstate.State != Neutral()
@@ -256,7 +266,7 @@ end
 function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
-    FEN = "K7/R7/8/8/8/8/8/r6b w - - 0 1"
+    FEN = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
     #FEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
 
