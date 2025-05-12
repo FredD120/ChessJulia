@@ -77,7 +77,7 @@ end
 function Move_BB()
     king_mvs = read_txt("king")
     knight_mvs = read_txt("knight")
-    Crights = [0b0011,0b1011,0b0111,0b1100,0b1110,0b1101]
+    Crights = [0b1100,0b1110,0b1101,0b0011,0b1011,0b0111]
     castle_check = read_txt("CastleCheck")
     return Move_BB(king_mvs,knight_mvs,Crights,castle_check)
 end
@@ -661,9 +661,12 @@ function get_moves(piece::King,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     if info.attack_num == 0
         #index into lookup table containing squares that must be free/not in check to castle
         #must mask out opponent's castle rights
-        for castleID in identify_locations(get_Crights(castlrts,colID,0))
-            castlecheck = moveset.CastleCheck[castleID+1]
-            if (castlecheck & all_pcs == 0) & (castlecheck & info.attack_sqs == 0)
+        for castleID in identify_locations(get_Crights(castlrts,(colID+1)%2,0))
+            castleattack = moveset.CastleCheck[castleID+1]
+            blockId = castleID%2 # only queenside castle (=1) has extra block squares
+            #white queen blockers are at index 5, black queen blockers are at index 6
+            castleblock = moveset.CastleCheck[castleID+blockId*(2+(castleID%3))+1]
+            if (castleblock & all_pcs == 0) & (castleattack & info.attack_sqs == 0)
                 push!(moves,create_castle(castleID%2,colID))
             end
         end
@@ -745,69 +748,123 @@ function swap_player!(board)
 end
 
 "make a kingside castle"
-function Kcastle!(B::Boardstate)
+function Kcastle!(B::Boardstate,CpieceID)
     kingpos = trailing_zeros(ally_pieces(B)[val(King())])
-    CpieceID = B.ColourIndex + val(King())
     B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+1]
-    B.pieces[CpieceID] = B.pieces[CpieceID] >> 2
+    B.pieces[CpieceID] = B.pieces[CpieceID] << 2
     B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+3]
 end 
 
 "make a queenside castle"
-function Qcastle!(B::Boardstate)
+function Qcastle!(B::Boardstate,CpieceID)
     kingpos = trailing_zeros(ally_pieces(B)[val(King())])
-    CpieceID = B.ColourIndex + val(King())
     B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+1]
-    B.pieces[CpieceID] = B.pieces[CpieceID] << 2
+    B.pieces[CpieceID] = B.pieces[CpieceID] >> 2
     B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos-1]
 end
 
 "update castling rights and Zhash"
-function updateCrights!(board,side)
+function updateCrights!(board::Boardstate,ColId,side)
     #remove ally castling rights by &-ing with opponent mask
     #side is king=1, queen=2, both=0
-    ColId = ColID(Opposite(board.ColourIndex))
-    Zhashcastle!(board.ZHash,board.castle)
+    Zhashcastle!(board.ZHash,board.Castle)
     board.Castle = get_Crights(board.Castle,ColId,side)
-    Zhashcastle!(board.ZHash,board.castle)
+    Zhashcastle!(board.ZHash,board.Castle)
 end
 
-"modify boardstate by making a move. increment halfmove count. add move to MoveHist"
+"modify boardstate by making a move. increment halfmove count. add move to MoveHist. update castling rights"
 function make_move!(move::Move,board::Boardstate)
+    #0 = white, 1 = black
+    ColId = ColID(board.ColourIndex)
     if move.flag == NOFLAG 
         move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
 
         if move.capture_type > 0
             destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
             push!(board.Data.Halfmoves,0)
+        elseif move.piece_type == val(Pawn())
+            push!(board.Data.Halfmoves,0)
         else
             board.Data.Halfmoves[end] += 1
+        end
+
+        #update castling rights
+        if get_Crights(board.Castle,(ColId+1)%2,0) > 0
+            if move.piece_type == val(King())
+                updateCrights!(board,ColId,0)
+            else
+                #lose self castle rights
+                if move.from == 63-56*ColId     #kingside
+                    updateCrights!(board,ColId,1)
+                elseif move.from == 56-56*ColId #queenside
+                    updateCrights!(board,ColId,2)
+                end
+                #remove enemy castle rights
+                if move.to == 7+56*ColId        #kingside
+                    updateCrights!(board,(ColId+1)%2,1)
+                elseif move.to == 56*ColId      #queenside
+                    updateCrights!(board,(ColId+1)%2,2)
+                end
+            end
         end
 
     elseif (move.flag == KCASTLE) | (move.flag == QCASTLE)
         rookID = board.ColourIndex + val(Rook())
         move_piece!(board,rookID,move.from,move.to)
-        updateCrights!(board,side)
+        updateCrights!(board,ColId,0)
+        CpieceID = board.ColourIndex + val(King())
         if move.flag == KCASTLE
-            Kcastle!(board)
+            Kcastle!(board,CpieceID)
         else
-            Qcastle!(board)
+            Qcastle!(board,CpieceID)
         end
+        #castling does not reset halfmove count
+        board.Data.Halfmoves[end] += 1
     end
+
     swap_player!(board)
     push!(board.MoveHist,move)
     push!(board.Data.ZHashHist,board.ZHash)
+
+    if board.Castle == board.Data.Castling[end]
+        board.Data.CastleCount[end] += 1
+    else
+        #add new castling rights to history stack
+        push!(board.Data.Castling,board.Castle)
+        push!(board.Data.CastleCount,0)
+    end
 end
 
 "unmakes last move on MoveHist stack. currently doesn't restore halfmoves"
 function unmake_move!(board::Boardstate)
+    OppCol = Opposite(board.ColourIndex)
     if length(board.MoveHist) > 0
         move = board.MoveHist[end]
-        move_piece!(board,Opposite(board.ColourIndex)+move.piece_type,move.to,move.from)
 
-        if move.capture_type > 0
-            create_piece!(board,board.ColourIndex+move.capture_type,move.to)
+        if move.flag == NOFLAG
+            move_piece!(board,OppCol+move.piece_type,move.to,move.from)
+
+            if move.capture_type > 0
+                create_piece!(board,board.ColourIndex+move.capture_type,move.to)
+            end
+
+        elseif (move.flag == KCASTLE) | (move.flag == QCASTLE)
+            rookID = OppCol + val(Rook())
+            move_piece!(board,rookID,move.to,move.from)
+            CpieceID = OppCol + val(King())
+            if move.flag == KCASTLE
+                Qcastle!(board,CpieceID)
+            else
+                Kcastle!(board,CpieceID)
+            end
         end
+
+        swap_player!(board)
+        pop!(board.MoveHist)
+
+        #update data struct with halfmoves, en-passant, hash and castling
+        pop!(board.Data.ZHashHist)
+        board.ZHash = board.Data.ZHashHist[end]
 
         if board.Data.Halfmoves[end] > 0 
             board.Data.Halfmoves[end] -= 1
@@ -815,9 +872,13 @@ function unmake_move!(board::Boardstate)
             pop!(board.Data.Halfmoves)
         end
 
-        swap_player!(board)
-        pop!(board.MoveHist)
-        pop!(board.Data.ZHashHist)
+        if board.Data.CastleCount[end] == 0
+            pop!(board.Data.CastleCount)
+            pop!(board.Data.Castling)
+            board.Castle = board.Data.Castling[end]
+        else
+            board.Data.CastleCount[end] -= 1
+        end
     else
         println("Failed to unmake move: No move history")
     end

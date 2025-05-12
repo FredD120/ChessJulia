@@ -372,7 +372,9 @@ function make_castle_blockers()
     Qwhite = (UInt64(1) << 58) | (UInt64(1) << 59) 
     Kblack = (UInt64(1) << 5) | (UInt64(1) << 6) 
     Qblack = (UInt64(1) << 2) | (UInt64(1) << 3) 
-    return [Kwhite,Qwhite,Kblack,Qblack]
+    QWblock = Qwhite | (UInt64(1) << 57)
+    QBblock = Qblack | (UInt64(1) << 1)
+    return [Kwhite,Qwhite,Kblack,Qblack,QWblock,QBblock]
 end
 
 function save_castle()

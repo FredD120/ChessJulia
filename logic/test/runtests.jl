@@ -1,8 +1,8 @@
 using logic
 using BenchmarkTools
 
-const expensive = false
-const verbose = false
+const expensive = true
+const verbose = true
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -167,10 +167,46 @@ function test_castle()
             Kcount +=1
         elseif m.flag == QCASTLE
             Qcount +=1
+        elseif (m.from == 63) & (m.capture_type == val(Rook()))
+            make_move!(m,board)
         end
     end
-    @assert Kcount == 1
-    @assert Qcount == 1
+    @assert Kcount == 1 "Should be able to castle kingside"
+    @assert Qcount == 1 "Should be able to castle queenside"
+    @assert board.Castle == Int(0b1010) "Both sides have lost kingside castling"
+
+    bmoves = generate_moves(board)
+    Kcount = 0
+    Qcount = 0
+    for m in bmoves 
+        if m.flag == KCASTLE
+            Kcount +=1
+        elseif m.flag == QCASTLE
+            Qcount +=1
+        elseif m.to == 12
+            make_move!(m,board)
+        end
+    end
+    @assert Kcount + Qcount == 0 "Should not be able to castle"
+
+    moves = generate_moves(board)
+    Kcount = 0
+    Qcount = 0
+    for m in moves 
+        if m.flag == KCASTLE
+            Kcount +=1
+        elseif m.flag == QCASTLE
+            Qcount +=1
+        end
+    end
+    @assert Kcount == 0 "Should not be able to castle kingside"
+    @assert Qcount == 1 "Should be able to castle queenside"
+    @assert length(board.Data.Castling) == 3
+
+    cFEN = "r3k2r/8/8/8/8/8/8/RB2K2R w KQkq - 0 1"
+    board = Boardstate(cFEN)
+    moves = generate_moves(board)
+    @assert all(i -> (i.flag != QCASTLE), moves) "cannot castle queenside when piece in the way"
 end
 test_castle()
 
@@ -425,7 +461,6 @@ function test_repetition()
             else
                 pos = 63
             end
-
             if (m.from == pos) | (m.to == pos)
                 make_move!(m,board)
                 break
@@ -502,6 +537,11 @@ function test_Zobrist()
        end
     end
     @assert board.ZHash == board.Data.ZHashHist[1] "Zhash should be identical to start pos"
+
+    unmake_move!(board)
+    unmake_move!(board)
+    unmake_move!(board)
+    @assert board.ZHash == newboard.ZHash "should be able to recover Zhash after unmaking move"
 end
 test_Zobrist()
 
@@ -516,9 +556,10 @@ test_perft()
 
 function test_speed()
     FENs = ["nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1",
-    "bbbqknbq/8/8/8/8/8/8/QNNNKBBQ w - 0 1"]
-    Depths = [5,4]
-    Targets = [11813050,7466475]
+    "bbbqknbq/8/8/8/8/8/8/QNNNKBBQ w - 0 1",
+    "r3k2r/4q1b1/bn3n2/4N3/8/2N2Q2/3BB3/R3K2R w KQkq -"]
+    Depths = [5,4,4]
+    Targets = [11813050,7466475,7960855]
     Δt = 0
     leaves = 0
 
@@ -535,7 +576,7 @@ function test_speed()
         if target == 0
             println(cur_leaves)
         else
-            @assert cur_leaves == target
+            @assert cur_leaves == target "failed on FEN $FEN, missing $(target-cur_leaves) nodes"
         end
     end
     return leaves,Δt
