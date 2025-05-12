@@ -41,18 +41,18 @@ function load_pieces(renderer)
     filepath = "$(pwd())/ChessPieces/"
     texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
 
-    texture_vec[logic.King+logic.White] = get_texture(renderer,filepath,"WhiteKing")
-    texture_vec[logic.Queen+logic.White] = get_texture(renderer,filepath,"WhiteQueen")
-    texture_vec[logic.Pawn+logic.White] = get_texture(renderer,filepath,"WhitePawn")
-    texture_vec[logic.Bishop+logic.White] = get_texture(renderer,filepath,"WhiteBishop")
-    texture_vec[logic.Knight+logic.White] = get_texture(renderer,filepath,"WhiteKnight")
-    texture_vec[logic.Rook+logic.White] = get_texture(renderer,filepath,"WhiteRook")
-    texture_vec[logic.King+logic.Black] = get_texture(renderer,filepath,"BlackKing")
-    texture_vec[logic.Queen+logic.Black] = get_texture(renderer,filepath,"BlackQueen")
-    texture_vec[logic.Pawn+logic.Black] = get_texture(renderer,filepath,"BlackPawn")
-    texture_vec[logic.Bishop+logic.Black] = get_texture(renderer,filepath,"BlackBishop")
-    texture_vec[logic.Knight+logic.Black] = get_texture(renderer,filepath,"BlackKnight")
-    texture_vec[logic.Rook+logic.Black] = get_texture(renderer,filepath,"BlackRook")
+    texture_vec[val(King())+White] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[val(Queen())+White] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[val(Pawn())+White] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[val(Bishop())+White] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[val(Knight())+White] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[val(Rook())+White] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[val(King())+Black] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[val(Queen())+Black] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[val(Pawn())+Black] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[val(Bishop())+Black] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[val(Knight())+Black] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[val(Rook())+Black] = get_texture(renderer,filepath,"BlackRook")
 
     return texture_vec
 end
@@ -144,6 +144,15 @@ function get_GUI_moves(BB,pieceID)
     return GUIboard
 end
 
+"convert a bitboard to visualise in GUI"
+function set_GUI(GUI,BB,pieceID)
+    pos_list = logic.identify_locations(BB)
+    for pos in pos_list
+        GUI[pos+1] = pieceID
+    end
+    return GUI
+end
+
 function remove!(a, item)
     deleteat!(a, findall(x->x==item, a))
 end
@@ -157,10 +166,26 @@ function mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,PLACE_PIECES)
             remove!(highlight_pieces,mouse_pos)
         end
     else
+        ## Display pawn moves using bitshifting
+        pawns = array_to_BB(highlight_pieces) 
+        rshift_mask = UInt64(0xFEFEFEFEFEFEFEFE)
+        lshift_mask = UInt64(0x7F7F7F7F7F7F7F7F)
+
+        pawn_push = pawns << 8
+        pawn_left = (pawn_push >> 1) & lshift_mask
+        pawn_right = (pawn_push << 1) & rshift_mask
+
+        GUIboard .= get_GUI_moves(UInt64(0xFF0000000000),val(Bishop()))
+        #GUIboard .= set_GUI(GUIboard,pawn_push,val(Pawn()))
+        #GUIboard .= set_GUI(GUIboard,pawn_left,val(Bishop()))
+        #GUIboard .= set_GUI(GUIboard,pawn_right,val(Rook()))
+
+        #= Display rook and bishop moves using magic BBs 
         blockers = array_to_BB(highlight_pieces) 
-        move_BB = logic.sliding_attacks(logic.BishopMagics[mouse_pos+1],blockers) #needs to belong to logic
+        move_BB = logic.sliding_attacks(logic.BishopMagics[mouse_pos+1],blockers)
 
         GUIboard .= get_GUI_moves(move_BB,logic.Bishop)
+        =#
     end
 end
 

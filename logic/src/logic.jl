@@ -555,9 +555,6 @@ pinned(::Bishop,pieceBB,bishoppins) = pieceBB & bishoppins
 "Rook can only move if pinned vertic/horizontally"
 pinned(::Rook,pieceBB,rookpins) = pieceBB & rookpins
 
-"Placeholder"
-pinned(::Pawn,pieceBB,rookpins,bishoppins) = UInt64(0)
-
 "returns attack and quiet moves only if legal, based on checks and pins"
 function get_moves(piece::Queen,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
     moves = Vector{Move}()
@@ -673,9 +670,68 @@ function get_moves(piece::King,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     return moves
 end
 
+"use bitshifts to push all white pawns at once"
+push_white(pawnBB) = pawnBB >> 8
+
+"use bitshifts to push all black pawns at once"
+push_black(pawnBB) = pawnBB << 8
+
 "returns attack and quiet moves for pawns only if legal, based on checks and pins"
-function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
-    return []
+function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,whitesmove,info::LegalInfo)
+    moves = Vector{Move}()
+    rshift_mask = UInt64(0xFEFEFEFEFEFEFEFE)
+    lshift_mask = UInt64(0x7F7F7F7F7F7F7F7F)
+
+    doublepushmask = UInt64(0xFF0000)
+    origshift = -8
+    push_func = push_black
+
+    if whitesmove
+        doublepushmask = UInt64(0xFF0000000000)
+        origshift =  8
+        push_func = push_white
+    end
+    
+    #split into pinned and unpinned pieces, then run movegetter seperately on each
+    unpinnedBB = pieceBB & ~(rookpins | bishoppins)
+    RpinnedBB = pinned(Rook(),pieceBB,rookpins)
+    BpinnedBB = pinned(Bishop(),pieceBB,bishoppins)
+
+    pushpawn1 = push_func(unpinnedBB)
+    legalpush1 = quiet_moves(pushpawn1,all_pcs)
+    pushpinned = push_func(RpinnedBB)
+    legalpush1 |= quiet_moves(pushpinned,all_pcs) & rookpins
+
+    pushpawn2 = push_func(legalpush1&doublepushmask)
+    legalpush2 = quiet_moves(pushpawn2,all_pcs)
+
+    for q1 in identify_locations(legalpush1 & info.blocks)
+        push!(moves,Move(val(piece),q1+origshift,q1,NULL_PIECE,NOFLAG))
+    end
+    for q2 in identify_locations(legalpush2 & info.blocks)
+        push!(moves,Move(val(piece),q2+2*origshift,q2,NULL_PIECE,NOFLAG))
+    end
+
+    attackleft = (pushpawn1 >> 1) & lshift_mask
+    attackright = (pushpawn1 << 1) & rshift_mask
+
+    Bpush = push_func(BpinnedBB)
+    Battackleft = (Bpush >> 1) & lshift_mask
+    Battackright = (Bpush << 1) & rshift_mask
+
+    attackleft |= Battackleft & bishoppins
+    attackright |= Battackright & bishoppins
+    
+    for la in identify_locations(attackleft & enemy_pcs)
+        attack_pcID = identify_piecetype(enemy_vec,la)
+        push!(moves,Move(val(piece),la+origshift+1,la,attack_pcID,NOFLAG))
+    end
+    for ra in identify_locations(attackright & enemy_pcs)
+        attack_pcID = identify_piecetype(enemy_vec,ra)
+        push!(moves,Move(val(piece),ra+origshift-1,ra,attack_pcID,NOFLAG))
+    end
+    
+    return moves
 end
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
@@ -704,11 +760,14 @@ function generate_moves(board::Boardstate)::Vector{Move}
     #if multiple checks on king, only king can move
     if legal_info.attack_num <= 1
         #run through pieces and BBs, adding moves to list
-        for (type,pieceBB) in zip(piecetypes[2:end],ally[2:end])
+        for (type,pieceBB) in zip(piecetypes[2:end-1],ally[2:end-1])
             piece_moves = get_moves(type,pieceBB,enemy,
             enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
             movelist = vcat(movelist,piece_moves)
         end
+        pawn_moves = get_moves(Pawn(),ally[end],enemy,enemy_pcsBB,all_pcsBB,
+        rookpins,bishoppins,Whitesmove(board.ColourIndex),legal_info)
+        movelist = vcat(movelist,pawn_moves)
     end
 
     if length(movelist) == 0
@@ -838,6 +897,7 @@ end
 function unmake_move!(board::Boardstate)
     OppCol = Opposite(board.ColourIndex)
     if length(board.MoveHist) > 0
+        board.State = Neutral()
         move = board.MoveHist[end]
 
         if move.flag == NOFLAG
@@ -851,6 +911,7 @@ function unmake_move!(board::Boardstate)
             rookID = OppCol + val(Rook())
             move_piece!(board,rookID,move.to,move.from)
             CpieceID = OppCol + val(King())
+            #unmaking a kingside castle is the same as a queenside castle and vice-versa
             if move.flag == KCASTLE
                 Qcastle!(board,CpieceID)
             else
