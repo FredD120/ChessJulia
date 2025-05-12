@@ -520,7 +520,7 @@ function legal_moves(piece::Knight,loc,all_pcs,info::LegalInfo)
 end
 
 "Filter possible moves for legality for Bishop"
-function legal_moves(piece::Bishop,loc,all_pcs,bishoppins,info::LegalInfo)
+function legal_moves(piece::Bishop,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
     poss_moves = possible_moves(piece,loc,all_pcs)
     #Filter out bishop moves that don't block/capture if in check/pinned
     legal_moves = poss_moves & (info.checks | info.blocks) & bishoppins
@@ -528,7 +528,7 @@ function legal_moves(piece::Bishop,loc,all_pcs,bishoppins,info::LegalInfo)
 end
 
 "Filter possible moves for legality for Rook"
-function legal_moves(piece::Rook,loc,all_pcs,rookpins,info::LegalInfo)
+function legal_moves(piece::Rook,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
     poss_moves = possible_moves(piece,loc,all_pcs)
     #Filter out rook moves that don't block/capture if in check/pinned
     legal_moves = poss_moves & (info.checks | info.blocks) & rookpins
@@ -537,8 +537,8 @@ end
 
 "Filter possible moves for legality for Queen"
 function legal_moves(::Queen,loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
-    legal_rook = legal_moves(Rook(),loc,all_pcs,rookpins,info)
-    legal_bishop = legal_moves(Bishop(),loc,all_pcs,bishoppins,info)
+    legal_rook = legal_moves(Rook(),loc,all_pcs,rookpins,bishoppins,info)
+    legal_bishop = legal_moves(Bishop(),loc,all_pcs,rookpins,bishoppins,info)
     return legal_rook | legal_bishop
 end
 
@@ -555,9 +555,6 @@ pinned(::Bishop,pieceBB,bishoppins) = pieceBB & bishoppins
 "Rook can only move if pinned vertic/horizontally"
 pinned(::Rook,pieceBB,rookpins) = pieceBB & rookpins
 
-"Queen may move in any pin"
-pinned(::Queen,pieceBB,rookpins,bishoppins) = pieceBB & (rookpins | bishoppins)
-
 "Placeholder"
 pinned(::Pawn,pieceBB,rookpins,bishoppins) = UInt64(0)
 
@@ -567,11 +564,13 @@ function get_moves(piece::Queen,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_
 
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
-    pinnedBB = pinned(piece,pieceBB,rookpins,bishoppins)
+    RpinnedBB = pinned(Rook(),pieceBB,rookpins)
+    BpinnedBB = pinned(Bishop(),pieceBB,bishoppins)
 
-    for (BB,rpins,bpins) in zip([pinnedBB,unpinnedBB],[rookpins,typemax(UInt64)],[bishoppins,typemax(UInt64)])
+    for (BB,type,rpins,bpins) in zip([unpinnedBB,RpinnedBB,BpinnedBB],[Queen(),Rook(),Bishop()],
+        [typemax(UInt64),rookpins,typemax(UInt64)],[typemax(UInt64),typemax(UInt64),bishoppins])
         for loc in identify_locations(BB)
-            legal = legal_moves(piece,loc,all_pcs,rpins,bpins,info)
+            legal = legal_moves(type,loc,all_pcs,rpins,bpins,info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
             quiet_moves = moves_from_location(val(piece),enemy_vec,quiets,loc,false)
@@ -593,7 +592,7 @@ function get_moves(piece::Rook,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
 
     for (BB,rpins) in zip([pinnedBB,unpinnedBB],[rookpins,typemax(UInt64)])
         for loc in identify_locations(BB)
-            legal = legal_moves(piece,loc,all_pcs,rpins,info)
+            legal = legal_moves(piece,loc,all_pcs,rpins,typemax(UInt64),info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
             quiet_moves = moves_from_location(val(piece),enemy_vec,quiets,loc,false)
@@ -615,7 +614,7 @@ function get_moves(piece::Bishop,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all
 
     for (BB,bpins) in zip([pinnedBB,unpinnedBB],[bishoppins,typemax(UInt64)])
         for loc in identify_locations(BB)
-            legal = legal_moves(piece,loc,all_pcs,bpins,info)
+            legal = legal_moves(piece,loc,all_pcs,typemax(UInt64),bpins,info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
             quiet_moves = moves_from_location(val(piece),enemy_vec,quiets,loc,false)

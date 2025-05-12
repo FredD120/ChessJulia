@@ -266,7 +266,7 @@ end
 function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
-    FEN = "r3k2r/4q1b1/bn3n2/4N3/8/2N2Q2/3BB3/R3K2R w KQkq -"
+    FEN = "r4k1r/4q1b1/bn3n2/2B1N3/8/2N2Q2/4B3/R3K2R b KQ -"
     #FEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
 
