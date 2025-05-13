@@ -65,7 +65,13 @@ const NOFLAG = UInt8(0)
 const KCASTLE = UInt8(1)
 const QCASTLE = KCASTLE + 1
 const EPFLAG = UInt8(3)
-const PROMOTE = UInt8(4)
+const DPUSH = UInt8(4)
+const PROMQUEEN = UInt8(5)
+const PROMROOK = UInt8(6)
+const PROMBISHOP = UInt8(7)
+const PROMKNIGHT = UInt8(8)
+
+struct Promote end
 
 struct Move
     piece_type::UInt8
@@ -708,10 +714,66 @@ const black_masks = (
 
 attack_left(pieceBB) = (pieceBB >> 1) & UInt64(0x7F7F7F7F7F7F7F7F)
 
-attack_left(pieceBB) = (pieceBB >> 1) & UInt64(0xFEFEFEFEFEFEFEFE)
+attack_right(pieceBB) = (pieceBB << 1) & UInt64(0xFEFEFEFEFEFEFEFE)
+
+"appends 4 promotion moves"
+function append_moves!(moves,piece_type,from,to,capture_type,::Promote)
+    for flag in [PROMQUEEN,PROMROOK,PROMBISHOP,PROMKNIGHT]
+        push!(moves,Move(piece_type,from,to,capture_type,flag))
+    end
+end
+
+"appends a non-promote move with a given flag"
+function append_moves!(moves,piece_type,from,to,capture_type,flag::UInt8)
+    push!(moves,Move(piece_type,from,to,capture_type,flag))
+end
+
+"Create list of pawn push moves with a given flag"
+function push_moves(singlepush,promotemask,shift,blocks,flag)
+    moves = Vector{Move}()
+    for q1 in identify_locations(singlepush & blocks & promotemask)
+        append_moves!(moves,val(Pawn()),q1+shift,q1,NULL_PIECE,flag)
+    end
+    return moves
+end
+
+"Create list of double pawn push moves"
+function push_moves(doublepush,shift,blocks)
+    moves = Vector{Move}()
+    for q2 in identify_locations(doublepush & blocks)
+        push!(moves,Move(val(Pawn()),q2+2*shift,q2,NULL_PIECE,DPUSH))
+    end
+    return moves
+end
+
+"Create list of pawn capture moves with a given flag"
+function capture_moves(leftattack,rightattack,promotemask,shift,enemy_pcs,enemy_vec::Vector{UInt64},flag)
+    moves = Vector{Move}()
+    for la in identify_locations(leftattack & enemy_pcs & promotemask)
+        attack_pcID = identify_piecetype(enemy_vec,la)
+        append_moves!(moves,val(Pawn()),la+shift+1,la,attack_pcID,flag)
+    end
+    for ra in identify_locations(rightattack & enemy_pcs & promotemask)
+        attack_pcID = identify_piecetype(enemy_vec,ra)
+        append_moves!(moves,val(Pawn()),ra+shift-1,ra,attack_pcID,flag)
+    end
+    return moves
+end
+
+"Create list of pawn en-passant moves"
+function capture_moves(leftattack,rightattack,shift,EP_sqs)
+    moves = Vector{Move}()
+    for la in identify_locations(leftattack & EP_sqs)
+        push!(moves,Move(val(Pawn()),la+shift+1,la,attack_pcID,EPFLAG))
+    end
+    for ra in identify_locations(rightattack & EP_sqs)
+        push!(moves,Move(val(Pawn()),ra+shift-1,ra,attack_pcID,EPFLAG))
+    end
+    return moves
+end
 
 "returns attack and quiet moves for pawns only if legal, based on checks and pins"
-function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,whitesmove,info::LegalInfo)
+function get_moves(::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,whitesmove,info::LegalInfo)
     moves = Vector{Move}()
     pawnMasks = ifelse(whitesmove,white_masks,black_masks)
 
@@ -720,21 +782,17 @@ function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     RpinnedBB = pinned(Rook(),pieceBB,rookpins)
     BpinnedBB = pinned(Bishop(),pieceBB,bishoppins)
 
+    #push once and remove any that are blocked
     pushpawn1 = cond_push(unpinnedBB,whitesmove)
     legalpush1 = quiet_moves(pushpawn1,all_pcs)
     pushpinned = cond_push(RpinnedBB,whitesmove)
     legalpush1 |= quiet_moves(pushpinned,all_pcs) & rookpins
 
+    #push twice if possible
     pushpawn2 = cond_push(legalpush1 & pawnMasks[1],whitesmove)
     legalpush2 = quiet_moves(pushpawn2,all_pcs)
 
-    for q1 in identify_locations(legalpush1 & info.blocks)
-        push!(moves,Move(val(piece),q1+pawnMasks[3],q1,NULL_PIECE,NOFLAG))
-    end
-    for q2 in identify_locations(legalpush2 & info.blocks)
-        push!(moves,Move(val(piece),q2+2*pawnMasks[3],q2,NULL_PIECE,NOFLAG))
-    end
-
+    #shift left and right to attack
     attackleft = attack_left(pushpawn1)
     attackright = attack_right(pushpawn1)
 
@@ -742,17 +800,17 @@ function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     Battackleft = attack_left(Bpush)
     Battackright = attack_right(Bpush)
 
+    #combine with attacks pinned by a bishop
     attackleft |= Battackleft & bishoppins
     attackright |= Battackright & bishoppins
     
-    for la in identify_locations(attackleft & enemy_pcs)
-        attack_pcID = identify_piecetype(enemy_vec,la)
-        push!(moves,Move(val(piece),la+pawnMasks[3]+1,la,attack_pcID,NOFLAG))
-    end
-    for ra in identify_locations(attackright & enemy_pcs)
-        attack_pcID = identify_piecetype(enemy_vec,ra)
-        push!(moves,Move(val(piece),ra+pawnMasks[3]-1,ra,attack_pcID,NOFLAG))
-    end
+    #add non-promote pushes, promote pushes, double pushes, non-promote captures, promote captures and en-passant
+    moves = vcat(moves,push_moves(legalpush1,~pawnMasks[2],pawnMasks[3],info.blocks,NOFLAG),
+        push_moves(legalpush1,pawnMasks[2],pawnMasks[3],info.blocks,Promote()),
+        push_moves(legalpush2,pawnMasks[3],info.blocks),
+        capture_moves(attackleft,attackright,~pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,NOFLAG),
+        capture_moves(attackleft,attackright,~pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,Promote()),
+        capture_moves(attackleft,attackright,pawnMasks[3],enpassBB))
     
     return moves
 end
@@ -788,7 +846,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
             enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
             movelist = vcat(movelist,piece_moves)
         end
-        pawn_moves = get_moves(Pawn(),ally[end],enemy,enemy_pcsBB,all_pcsBB,
+        pawn_moves = get_moves(Pawn(),ally[end],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
         rookpins,bishoppins,Whitesmove(board.ColourIndex),legal_info)
         movelist = vcat(movelist,pawn_moves)
     end
@@ -857,7 +915,7 @@ end
 function make_move!(move::Move,board::Boardstate)
     #0 = white, 1 = black
     ColId = ColID(board.ColourIndex)
-    if move.flag == NOFLAG 
+    if (move.flag == NOFLAG)
         move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
 
         if move.capture_type > 0
