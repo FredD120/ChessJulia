@@ -1,5 +1,26 @@
 module logic
 
+###TO THINK ABOUT###
+#Are tuples better than vectors for data known at compile time?
+#How much data is being passed around by functions unnecessarily?
+#Is there code branching due to type instability?
+#Decide function once then repeatedly call it (functions have different types -> type instability)
+#Vs call function repeatedly and choose each time (for only two cheap functions is ok)
+#Can force definite types for function dispatch, will create union of types that are slow if too many
+#=
+To check generated code:
+@code_llvm
+@code_native
+@code_warntype
+=#
+
+###TODO###
+#Add en-passant moves
+#Add promotions
+#Add doublepush flag
+#Handle above in move maker/unmaker
+#Add pawn attacks to all attacks BB for king legality
+
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
 King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val,
@@ -670,65 +691,67 @@ function get_moves(piece::King,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_p
     return moves
 end
 
-"use bitshifts to push all white pawns at once"
-push_white(pawnBB) = pawnBB >> 8
+"use bitshifts to push all white/black pawns at once"
+cond_push(pawnBB,isWhite) = ifelse(isWhite,pawnBB >> 8,pawnBB << 8)
 
-"use bitshifts to push all black pawns at once"
-push_black(pawnBB) = pawnBB << 8
+const white_masks = (
+        doublepushmask = UInt64(0xFF0000000000),
+        promotemask = UInt64(0xFF),
+        origshift =  8
+)
+
+const black_masks = (
+        doublepushmask = UInt64(0xFF0000),
+        promotemask = UInt64(0xFF00000000000000),
+        origshift =  -8
+)
+
+attack_left(pieceBB) = (pieceBB >> 1) & UInt64(0x7F7F7F7F7F7F7F7F)
+
+attack_left(pieceBB) = (pieceBB >> 1) & UInt64(0xFEFEFEFEFEFEFEFE)
 
 "returns attack and quiet moves for pawns only if legal, based on checks and pins"
 function get_moves(piece::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,whitesmove,info::LegalInfo)
     moves = Vector{Move}()
-    rshift_mask = UInt64(0xFEFEFEFEFEFEFEFE)
-    lshift_mask = UInt64(0x7F7F7F7F7F7F7F7F)
+    pawnMasks = ifelse(whitesmove,white_masks,black_masks)
 
-    doublepushmask = UInt64(0xFF0000)
-    origshift = -8
-    push_func = push_black
-
-    if whitesmove
-        doublepushmask = UInt64(0xFF0000000000)
-        origshift =  8
-        push_func = push_white
-    end
-    
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     RpinnedBB = pinned(Rook(),pieceBB,rookpins)
     BpinnedBB = pinned(Bishop(),pieceBB,bishoppins)
 
-    pushpawn1 = push_func(unpinnedBB)
+    pushpawn1 = cond_push(unpinnedBB,whitesmove)
     legalpush1 = quiet_moves(pushpawn1,all_pcs)
-    pushpinned = push_func(RpinnedBB)
+    pushpinned = cond_push(RpinnedBB,whitesmove)
     legalpush1 |= quiet_moves(pushpinned,all_pcs) & rookpins
 
-    pushpawn2 = push_func(legalpush1&doublepushmask)
+    pushpawn2 = cond_push(legalpush1 & pawnMasks[1],whitesmove)
     legalpush2 = quiet_moves(pushpawn2,all_pcs)
 
     for q1 in identify_locations(legalpush1 & info.blocks)
-        push!(moves,Move(val(piece),q1+origshift,q1,NULL_PIECE,NOFLAG))
+        push!(moves,Move(val(piece),q1+pawnMasks[3],q1,NULL_PIECE,NOFLAG))
     end
     for q2 in identify_locations(legalpush2 & info.blocks)
-        push!(moves,Move(val(piece),q2+2*origshift,q2,NULL_PIECE,NOFLAG))
+        push!(moves,Move(val(piece),q2+2*pawnMasks[3],q2,NULL_PIECE,NOFLAG))
     end
 
-    attackleft = (pushpawn1 >> 1) & lshift_mask
-    attackright = (pushpawn1 << 1) & rshift_mask
+    attackleft = attack_left(pushpawn1)
+    attackright = attack_right(pushpawn1)
 
-    Bpush = push_func(BpinnedBB)
-    Battackleft = (Bpush >> 1) & lshift_mask
-    Battackright = (Bpush << 1) & rshift_mask
+    Bpush = cond_push(BpinnedBB,whitesmove)
+    Battackleft = attack_left(Bpush)
+    Battackright = attack_right(Bpush)
 
     attackleft |= Battackleft & bishoppins
     attackright |= Battackright & bishoppins
     
     for la in identify_locations(attackleft & enemy_pcs)
         attack_pcID = identify_piecetype(enemy_vec,la)
-        push!(moves,Move(val(piece),la+origshift+1,la,attack_pcID,NOFLAG))
+        push!(moves,Move(val(piece),la+pawnMasks[3]+1,la,attack_pcID,NOFLAG))
     end
     for ra in identify_locations(attackright & enemy_pcs)
         attack_pcID = identify_piecetype(enemy_vec,ra)
-        push!(moves,Move(val(piece),ra+origshift-1,ra,attack_pcID,NOFLAG))
+        push!(moves,Move(val(piece),ra+pawnMasks[3]-1,ra,attack_pcID,NOFLAG))
     end
     
     return moves

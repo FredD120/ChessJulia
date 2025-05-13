@@ -175,7 +175,7 @@ function mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,PLACE_PIECES)
         pawn_left = (pawn_push >> 1) & lshift_mask
         pawn_right = (pawn_push << 1) & rshift_mask
 
-        GUIboard .= get_GUI_moves(UInt64(0xFF0000000000),val(Bishop()))
+        GUIboard .= get_GUI_moves(UInt64(0xFF),val(Bishop()))
         #GUIboard .= set_GUI(GUIboard,pawn_push,val(Pawn()))
         #GUIboard .= set_GUI(GUIboard,pawn_left,val(Bishop()))
         #GUIboard .= set_GUI(GUIboard,pawn_right,val(Rook()))
