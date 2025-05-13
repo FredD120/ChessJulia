@@ -20,6 +20,7 @@ To check generated code:
 #Add doublepush flag
 #Handle above in move maker/unmaker
 #Add pawn attacks to all attacks BB for king legality
+#Check for illegal EP when rook sees king through pawns
 
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
@@ -400,11 +401,15 @@ possible_moves(::Rook,location,all_pcs) = sliding_attacks(RookMagics[location+1]
 possible_moves(::Bishop,location,all_pcs) = sliding_attacks(BishopMagics[location+1],all_pcs)
 "All pseudolegal Queen moves"
 possible_moves(::Queen,location,all_pcs) = sliding_attacks(RookMagics[location+1],all_pcs) | sliding_attacks(BishopMagics[location+1],all_pcs)
-"Not yet implemented, but must only be attacking moves"
-possible_moves(::Pawn,location,all_pcs) = UInt64(0)
+
+"Returns BB containing attacking moves assuming all pieces in BB are pawns"
+function possible_moves(::Pawn,pawnBB,Whitesmove)
+    pawn_push = cond_push(pawnBB,Whitesmove)
+    return attack_left(pawn_push) | attack_right(pawn_push)
+end
 
 "checks enemy pieces to see if any are attacking the king square, returns BB of attackers"
-function attack_pcs(pc_list::Vector{UInt64},all_pcs::UInt64,location::Integer)::UInt64
+function attack_pcs(pc_list::Vector{UInt64},all_pcs::UInt64,location::Integer,Whitesmove)::UInt64
     attacks = UInt64(0)
     knightmoves = possible_moves(Knight(),location,all_pcs)
     attacks |= (knightmoves & pc_list[val(Knight())])
@@ -417,18 +422,22 @@ function attack_pcs(pc_list::Vector{UInt64},all_pcs::UInt64,location::Integer)::
     bishopattacks = (bishopmoves & (pc_list[val(Bishop())] | pc_list[val(Queen())]))
     attacks |= bishopattacks
 
+    pawnattacks = possible_moves(Pawn(),UInt64(1)<<location,Whitesmove)
+    attacks |= pawnattacks & pc_list[val(Pawn())]
+
     return attacks
 end
 
 "Bitboard of all squares being attacked by a side"
-function all_poss_moves(pc_list::Vector{UInt64},all_pcs)
+function all_poss_moves(pc_list::Vector{UInt64},all_pcs,Whitesmove::Bool)::UInt64
     attacks = UInt64(0)
 
-    for (pieceBB,type) in zip(pc_list,piecetypes)
+    for (pieceBB,type) in zip(pc_list[1:end-1],piecetypes[1:end-1])
         for location in identify_locations(pieceBB)
             attacks |= possible_moves(type,location,all_pcs)
         end
     end
+    attacks |= possible_moves(Pawn(),pc_list[val(Pawn())],!Whitesmove)
     return attacks
 end
 
@@ -465,20 +474,20 @@ function detect_pins(pos,pc_list,all_pcs,ally_pcs)
 end
 
 "returns struct containing info on attacks, blocks and pins of king by enemy piecelist"
-function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB)::LegalInfo
+function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB,Whitesmove)::LegalInfo
     attacks = typemax(UInt64)
     blocks = UInt64(0)
     attacker_num = 0
 
     #construct BB of all enemy attacks, must remove king when checking if square is attacked
     all_except_king = all_pcs & ~(KingBB)
-    attacked_sqs = all_poss_moves(pc_list,all_except_king)
+    attacked_sqs = all_poss_moves(pc_list,all_except_king,Whitesmove)
 
     #if king not under attack, dont need to find attacking pieces or blockers
     if KingBB & attacked_sqs == UInt64(0) 
         blocks = typemax(UInt64)
     else
-        attacks = attack_pcs(pc_list,all_pcs,position)
+        attacks = attack_pcs(pc_list,all_pcs,position,Whitesmove)
         attacker_num = count_ones(attacks)
         #if only a single sliding piece is attacking the king, it can be blocked
         if attacker_num == 1
@@ -829,10 +838,11 @@ function generate_moves(board::Boardstate)::Vector{Move}
     all_pcsBB = BBunion(board.pieces)
     ally_pcsBB = all_pcsBB & ~enemy_pcsBB
     kingBB = ally[val(King())]
+    isWhite = Whitesmove(board.ColourIndex)
     
     kingpos = identify_locations(kingBB)[1]
     rookpins,bishoppins = detect_pins(kingpos,enemy,all_pcsBB,ally_pcsBB)
-    legal_info = attack_info(enemy,all_pcsBB,kingpos,kingBB)
+    legal_info = attack_info(enemy,all_pcsBB,kingpos,kingBB,isWhite)
 
     king_moves = get_moves(King(),kingBB,enemy,enemy_pcsBB,all_pcsBB,
     board.Castle,ColID(board.ColourIndex),legal_info)
@@ -847,7 +857,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
             movelist = vcat(movelist,piece_moves)
         end
         pawn_moves = get_moves(Pawn(),ally[end],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
-        rookpins,bishoppins,Whitesmove(board.ColourIndex),legal_info)
+        rookpins,bishoppins,isWhite,legal_info)
         movelist = vcat(movelist,pawn_moves)
     end
 

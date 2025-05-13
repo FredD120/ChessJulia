@@ -210,6 +210,12 @@ function test_castle()
 end
 test_castle()
 
+function test_pawns()
+    pFEN = "8/8/8/8/8/2b6/PPP5/K7 w - - 0 1"
+    board = Boardstate(pFEN)
+end
+test_pawns()
+
 function test_attckpcs()
     simpleFEN = "K6r/2n5/8/8/8/8/8/7b w - - 0 1"
     board = Boardstate(simpleFEN)    
