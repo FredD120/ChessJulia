@@ -21,11 +21,15 @@ To check generated code:
 #Handle above in move maker/unmaker
 #Add pawn attacks to all attacks BB for king legality
 #Check for illegal EP when rook sees king through pawns
+#Write tests for above
+#Parse perft file and run
+
 
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
 King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val,
-NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMOTE, ally_pieces, enemy_pieces
+NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
+PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces
 
 using InteractiveUtils
 using JLD2
@@ -188,7 +192,7 @@ Whitesmove(ColourIndex::UInt8) = ColourIndex == 0 ? true : false
 ColID(ColourIndex::UInt8) = ColourIndex % 5
 
 "Helper function to return opposite colour index"
-Opposite(ColourIndex) = (ColourIndex+6)%12
+Opposite(ColourIndex::UInt8)::UInt8 = (ColourIndex+6)%12
 
 "returns a list of numbers between 0 and 63 to indicate positions on a chessboard"
 function identify_locations(pieceBB::Integer)::Vector{UInt8}
@@ -773,10 +777,10 @@ end
 function capture_moves(leftattack,rightattack,shift,EP_sqs)
     moves = Vector{Move}()
     for la in identify_locations(leftattack & EP_sqs)
-        push!(moves,Move(val(Pawn()),la+shift+1,la,attack_pcID,EPFLAG))
+        push!(moves,Move(val(Pawn()),la+shift+1,la,val(Pawn()),EPFLAG))
     end
     for ra in identify_locations(rightattack & EP_sqs)
-        push!(moves,Move(val(Pawn()),ra+shift-1,ra,attack_pcID,EPFLAG))
+        push!(moves,Move(val(Pawn()),ra+shift-1,ra,val(Pawn()),EPFLAG))
     end
     return moves
 end
@@ -818,7 +822,7 @@ function get_moves(::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,en
         push_moves(legalpush1,pawnMasks[2],pawnMasks[3],info.blocks,Promote()),
         push_moves(legalpush2,pawnMasks[3],info.blocks),
         capture_moves(attackleft,attackright,~pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,NOFLAG),
-        capture_moves(attackleft,attackright,~pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,Promote()),
+        capture_moves(attackleft,attackright,pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,Promote()),
         capture_moves(attackleft,attackright,pawnMasks[3],enpassBB))
     
     return moves
@@ -921,23 +925,43 @@ function updateCrights!(board::Boardstate,ColId,side)
     Zhashcastle!(board.ZHash,board.Castle)
 end
 
+"Decide which piecetype to promote to"
+function promote_type(flag)
+    if flag == PROMQUEEN
+        return val(Queen())
+    elseif flag == PROMROOK
+        return val(Rook())
+    elseif flag == PROMBISHOP
+        return val(Bishop())
+    elseif flag == PROMKNIGHT
+        return val(Knight())
+    end
+end
+
+"Returns location of en-passant and also pawn being captured by en-passant"
+EPlocation(moveloc,ColId) = ifelse(ColId==0,moveloc+8,moveloc-8)
+
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist. update castling rights"
 function make_move!(move::Move,board::Boardstate)
     #0 = white, 1 = black
     ColId = ColID(board.ColourIndex)
-    if (move.flag == NOFLAG)
-        move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
 
-        if move.capture_type > 0
-            destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
-            push!(board.Data.Halfmoves,0)
-        elseif move.piece_type == val(Pawn())
-            push!(board.Data.Halfmoves,0)
+    #deal with castling
+    if (move.flag == KCASTLE) | (move.flag == QCASTLE)
+        rookID = board.ColourIndex + val(Rook())
+        move_piece!(board,rookID,move.from,move.to)
+        updateCrights!(board,ColId,0)
+        CpieceID = board.ColourIndex + val(King())
+        if move.flag == KCASTLE
+            Kcastle!(board,CpieceID)
         else
-            board.Data.Halfmoves[end] += 1
+            Qcastle!(board,CpieceID)
         end
+        #castling does not reset halfmove count
+        board.Data.Halfmoves[end] += 1
 
-        #update castling rights
+    #update castling rights if not castling    
+    else
         if get_Crights(board.Castle,(ColId+1)%2,0) > 0
             if move.piece_type == val(King())
                 updateCrights!(board,ColId,0)
@@ -956,25 +980,53 @@ function make_move!(move::Move,board::Boardstate)
                 end
             end
         end
+        #deal with promotions, always reset halfmove clock
+        if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
+            push!(board.Data.Halfmoves,0)
+            destroy_piece!(board,board.ColourIndex+move.piece_type,move.from)
+            create_piece!(board,board.ColourIndex+promote_type(move.flag),move.to)
 
-    elseif (move.flag == KCASTLE) | (move.flag == QCASTLE)
-        rookID = board.ColourIndex + val(Rook())
-        move_piece!(board,rookID,move.from,move.to)
-        updateCrights!(board,ColId,0)
-        CpieceID = board.ColourIndex + val(King())
-        if move.flag == KCASTLE
-            Kcastle!(board,CpieceID)
-        else
-            Qcastle!(board,CpieceID)
+            if move.capture_type > 0
+                destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
+            end
+
+        else #no flag, en-passant, double push
+            move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
+
+            if move.capture_type > 0
+                destroy_loc = move.to
+                if move.flag == EPFLAG
+                    destroy_loc = EPlocation(destroy_loc,ColId)
+                end
+                destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,destroy_loc)
+                push!(board.Data.Halfmoves,0)
+            elseif move.piece_type == val(Pawn())
+                push!(board.Data.Halfmoves,0)
+            else
+                board.Data.Halfmoves[end] += 1
+            end
         end
-        #castling does not reset halfmove count
-        board.Data.Halfmoves[end] += 1
+    end
+
+    #update EnPassant
+    if move.flag == DPUSH
+        location = EPlocation(move.to,ColID)
+        board.EnPass = UInt64(1) << location
+        push!(board.Data.EnPassant,board.EnPass)
+        push!(board.Data.EPCount,0)
+    elseif board.EnPass > 0
+        board.EnPass == UInt64(0)
+        push!(board.Data.EnPassant,board.EnPass)
+        push!(board.Data.EPCount,0)
+    else
+        board.Data.EPCount[end] += 1
     end
 
     swap_player!(board)
     push!(board.MoveHist,move)
     push!(board.Data.ZHashHist,board.ZHash)
 
+    #check if caslting rights have changed
     if board.Castle == board.Data.Castling[end]
         board.Data.CastleCount[end] += 1
     else
@@ -984,21 +1036,14 @@ function make_move!(move::Move,board::Boardstate)
     end
 end
 
-"unmakes last move on MoveHist stack. currently doesn't restore halfmoves"
+"unmakes last move on MoveHist stack. restore halfmoves, EP squares and castle rights"
 function unmake_move!(board::Boardstate)
     OppCol = Opposite(board.ColourIndex)
     if length(board.MoveHist) > 0
         board.State = Neutral()
         move = board.MoveHist[end]
 
-        if move.flag == NOFLAG
-            move_piece!(board,OppCol+move.piece_type,move.to,move.from)
-
-            if move.capture_type > 0
-                create_piece!(board,board.ColourIndex+move.capture_type,move.to)
-            end
-
-        elseif (move.flag == KCASTLE) | (move.flag == QCASTLE)
+        if (move.flag == KCASTLE)|(move.flag == QCASTLE)
             rookID = OppCol + val(Rook())
             move_piece!(board,rookID,move.to,move.from)
             CpieceID = OppCol + val(King())
@@ -1007,6 +1052,27 @@ function unmake_move!(board::Boardstate)
                 Qcastle!(board,CpieceID)
             else
                 Kcastle!(board,CpieceID)
+            end
+        
+        #deal with everything other than castling
+        else
+            if (move.flag==NOFLAG)|(move.flag==DPUSH)|(move.flag==EPFLAG)
+                move_piece!(board,OppCol+move.piece_type,move.to,move.from)
+
+                if move.capture_type > 0
+                    create_loc = move.to
+                    if move.flag == EPFLAG
+                        create_loc = EPlocation(create_loc,ColID(OppCol))
+                    end
+                    create_piece!(board,board.ColourIndex+move.capture_type,create_loc)
+                end
+            else #deal with promotions
+                create_piece!(board,OppCol+move.piece_type,move.from)
+                destroy_piece!(board,OppCol+promote_type(move.flag),move.to)
+
+                if move.capture_type > 0
+                    create_piece!(board,board.ColourIndex+move.capture_type,move.to)
+                end
             end
         end
 
@@ -1030,6 +1096,14 @@ function unmake_move!(board::Boardstate)
         else
             board.Data.CastleCount[end] -= 1
         end
+
+        if board.Data.EPCount[end] == 0
+            pop!(board.Data.EPCount)
+            pop!(board.Data.EnPassant)
+            board.EnPass = board.Data.EnPassant[end]
+        else
+            board.Data.EPCount[end] -= 1
+        end  
     else
         println("Failed to unmake move: No move history")
     end

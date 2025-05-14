@@ -156,19 +156,50 @@ function mouse_clicked(mouse_pos,legal_moves,kingpos)
     return highlight
 end
 
+function promote_squares!(highlight,position,prompos,ColourID)
+    inc = ifelse(ColourID==0,8,-8)
+    highlight .= []
+    Ptype = [val(Queen()),val(Rook()),val(Bishop()),val(Knight())]
+    for i in 0:3
+        push!(highlight,prompos+inc)
+        position[prompos+inc] .= Ptype[i+1+ColourID]
+    end
+end
+
 "update logic with move made"
-function move_clicked!(move_from,mouse_pos,kingpos,legal_moves,logicstate)
-    for move in legal_moves
-        if (move.to == mouse_pos) & (move.from == move_from)
-            make_move!(move,logicstate)
-        #check for castling moves
-        elseif move_from == kingpos
-            if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
-                make_move!(move,logicstate)
-            elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
-                make_move!(move,logicstate)
+function move_clicked!(position,highlight,move_from,mouse_pos,kingpos,legal_moves,promote,logicstate)
+    promote_move = false
+    if !promote
+        for move in legal_moves
+            if (move.to == mouse_pos) & (move.from == move_from)
+                if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
+                    promote_move = true
+                else
+                    make_move!(move,logicstate)
+                end
+            #check for castling moves
+            elseif move_from == kingpos
+                if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
+                    make_move!(move,logicstate)
+                elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
+                    make_move!(move,logicstate)
+                end
             end
         end
+    else
+        println("promote on $move_from")
+    end
+
+    if promote_move
+        promote_squares!(highlight,position,mouse_pos,logicstate.ColourIndex)
+        promote = true
+    else
+        #update positions of pieces in GUI representation
+        position .= GUIposition(logicstate)
+        #generate new set of moves
+        legal_moves .= generate_moves(logicstate)
+        highlight .= []
+        move_from = -1
     end
 end
 
@@ -179,6 +210,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
     legal_moves = generate_moves(logicstate)
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
+    promoting = false
     UNMAKE = true           #allow unmaking moves
     try
         close = false
@@ -210,15 +242,12 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                     if (length(highlight_moves) > 0) & !DEBUG
                         if mouse_pos in highlight_moves
                             #make move in logic then update GUI to reflect new board
-                            move_clicked!(sq_clicked,mouse_pos,kingpos,legal_moves,logicstate)
-                            #update positions of pieces in GUI representation
-                            position = GUIposition(logicstate)
-                            #generate new set of moves
-                            legal_moves = generate_moves(logicstate)
+                            move_clicked!(position,highlight_moves,sq_clicked,mouse_pos,kingpos,legal_moves,promote,logicstate)
+                        else
+                            #reset square clicked on to nothing
+                            highlight_moves = []
+                            sq_clicked = -1
                         end
-                        #reset square clicked on to nothing
-                        highlight_moves = []
-                        sq_clicked = -1
                     else
                         highlight_moves = mouse_clicked(mouse_pos,legal_moves,kingpos)
                         sq_clicked = mouse_pos
@@ -266,7 +295,6 @@ end
 function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
-    #FEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
 
     WIDTH = 800

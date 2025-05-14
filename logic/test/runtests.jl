@@ -1,7 +1,7 @@
 using logic
 using BenchmarkTools
 
-const expensive = true
+const expensive = false
 const verbose = true
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -105,7 +105,7 @@ function test_legalinfo()
     simpleFEN = "K7/R7/8/8/8/8/8/r6q w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
@@ -114,7 +114,7 @@ function test_legalinfo()
     simpleFEN = "K7/7R/8/8/8/8/8/qq6 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
     @assert length(logic.identify_locations(info.blocks)) == 6 "6 squares blocking queen attack"
 
     simpleFEN = "4k3/8/8/8/4q3/8/4B3/1Q2K3 w - 0 1"
@@ -122,7 +122,7 @@ function test_legalinfo()
     all_pcs = logic.BBunion(board.pieces)
     kingBB = logic.ally_pieces(board)[val(King())]
     kingpos = logic.identify_locations(kingBB)[1]
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,true)
 
     @assert info.blocks == typemax(UInt64)
     @assert info.checks == typemax(UInt64)
@@ -211,18 +211,33 @@ end
 test_castle()
 
 function test_pawns()
-    pFEN = "8/8/8/8/8/2b6/PPP5/K7 w - - 0 1"
+    pFEN = "8/8/8/8/8/2b5/PPP5/K7 w - - 0 1"
     board = Boardstate(pFEN)
+    moves = generate_moves(board)
+
+    @assert count(i->(i.piece_type==val(Pawn())),moves) == 3 "Pinned/blocked by bishop"
+    @assert count(i->(i.capture_type==val(Bishop())),moves) == 1 "Capture bishop along pin"
+
+    EPfen = "8/3p4/7R/k6R/7R/8/8/8 b - - 0 1"
+    board = Boardstate(EPfen)
+    moves = generate_moves(board)
+
+    @assert length(moves) == 1 "Only one legal move, pawn double push"
+    @assert moves[1].flag == DPUSH
+
+    make_move!(moves[1],board)
+    @assert board.EnPass == UInt64(1) << 19 "En-passant square created by double push"
 end
 test_pawns()
 
 function test_attckpcs()
-    simpleFEN = "K6r/2n5/8/8/8/8/8/7b w - - 0 1"
+    simpleFEN = "8/p2n4/1K5r/8/8/8/8/6b1 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
+    kingpos = logic.identify_locations(board.pieces[val(King())])[1]
 
-    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,0)
-    @assert checkers == (UInt64(1)<<7)|(UInt64(1)<<10)|(UInt64(1)<<63) "2 sliding piece attacks and a knight"
+    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,true)
+    @assert checkers == (UInt64(1)<<8)|(UInt64(1)<<11)|(UInt64(1)<<23)|(UInt64(1)<<62) "2 sliding piece attacks, a knight and a pawn"
 end
 test_attckpcs()
 
@@ -230,7 +245,7 @@ function test_allposs()
     simpleFEN = "R1R1R1R1/8/8/8/8/8/8/1R1R1R1R b - - 0 1"
     board = Boardstate(simpleFEN) 
     all_pcs = logic.BBunion(board.pieces)  
-    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs)
+    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs,Whitesmove(board.ColourIndex))
 
     @assert attkBB == typemax(UInt64) "rooks are covering all squares"
 end
