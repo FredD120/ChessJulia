@@ -187,7 +187,7 @@ mutable struct Boardstate
 end
 
 "Helper function to determine whose move it is"
-Whitesmove(ColourIndex::UInt8) = ColourIndex == 0 ? true : false
+Whitesmove(ColourIndex::UInt8) = ifelse(ColourIndex == 0, true, false)
 
 ColID(ColourIndex::UInt8) = ColourIndex % 5
 
@@ -760,33 +760,56 @@ function push_moves(doublepush,shift,blocks)
 end
 
 "Create list of pawn capture moves with a given flag"
-function capture_moves(leftattack,rightattack,promotemask,shift,enemy_pcs,enemy_vec::Vector{UInt64},flag)
+function capture_moves(leftattack,rightattack,promotemask,shift,enemy_pcs,checks,enemy_vec::Vector{UInt64},flag)
     moves = Vector{Move}()
-    for la in identify_locations(leftattack & enemy_pcs & promotemask)
+    for la in identify_locations(leftattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,la)
         append_moves!(moves,val(Pawn()),la+shift+1,la,attack_pcID,flag)
     end
-    for ra in identify_locations(rightattack & enemy_pcs & promotemask)
+    for ra in identify_locations(rightattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,ra)
         append_moves!(moves,val(Pawn()),ra+shift-1,ra,attack_pcID,flag)
     end
     return moves
 end
 
+"returns false if it fails edge case where EP exposes attack on king"
+function EPedgecase(from,EPcap,kingpos,all_pcs,enemy_vec)
+    if (from % 8) == (kingpos % 8) 
+        #all pcs BB after en-passant
+        after_EP = setzero(setzero(all_pcs,from),EPcap)
+        kingrookmvs = possible_moves(Rook(),kingpos,after_EP)
+        if kingrookmvs & (enemy_vec[val(Rook())] | enemy_vec[val(Queen())]) > 0
+            return false
+        end
+    end
+    return true
+end
+
+"Check legality of en-passant before adding it to move list"
+function push_EP!(moves,from,to,shift,checks,all_pcs,enemy_vec,kingpos)
+    EPcap = to+shift
+    if setzero(checks,EPcap) == 0
+        if EPedgecase(from,EPcap,kingpos,all_pcs,enemy_vec)
+            push!(moves,Move(val(Pawn()),from,to,val(Pawn()),EPFLAG))
+        end
+    end
+end
+
 "Create list of pawn en-passant moves"
-function capture_moves(leftattack,rightattack,shift,EP_sqs)
+function EP_moves(leftattack,rightattack,shift,EP_sqs,checks,all_pcs,enemy_vec,kingpos)
     moves = Vector{Move}()
-    for la in identify_locations(leftattack & EP_sqs)
-        push!(moves,Move(val(Pawn()),la+shift+1,la,val(Pawn()),EPFLAG))
+    for la in identify_locations(leftattack & EP_sqs)  
+        push_EP!(moves,la+shift+1,la,shift,checks,all_pcs,enemy_vec,kingpos)
     end
     for ra in identify_locations(rightattack & EP_sqs)
-        push!(moves,Move(val(Pawn()),ra+shift-1,ra,val(Pawn()),EPFLAG))
+        push_EP!(moves,ra+shift-1,ra,shift,checks,all_pcs,enemy_vec,kingpos)
     end
     return moves
 end
 
 "returns attack and quiet moves for pawns only if legal, based on checks and pins"
-function get_moves(::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,whitesmove,info::LegalInfo)
+function get_moves(::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,whitesmove,kingpos,info::LegalInfo)
     moves = Vector{Move}()
     pawnMasks = ifelse(whitesmove,white_masks,black_masks)
 
@@ -821,9 +844,9 @@ function get_moves(::Pawn,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,en
     moves = vcat(moves,push_moves(legalpush1,~pawnMasks[2],pawnMasks[3],info.blocks,NOFLAG),
         push_moves(legalpush1,pawnMasks[2],pawnMasks[3],info.blocks,Promote()),
         push_moves(legalpush2,pawnMasks[3],info.blocks),
-        capture_moves(attackleft,attackright,~pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,NOFLAG),
-        capture_moves(attackleft,attackright,pawnMasks[2],pawnMasks[3],enemy_pcs,enemy_vec,Promote()),
-        capture_moves(attackleft,attackright,pawnMasks[3],enpassBB))
+        capture_moves(attackleft,attackright,~pawnMasks[2],pawnMasks[3],enemy_pcs,info.checks,enemy_vec,NOFLAG),
+        capture_moves(attackleft,attackright,pawnMasks[2],pawnMasks[3],enemy_pcs,info.checks,enemy_vec,Promote()),
+        EP_moves(attackleft,attackright,pawnMasks[3],enpassBB,info.checks,all_pcs,enemy_vec,kingpos))
     
     return moves
 end
@@ -861,7 +884,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
             movelist = vcat(movelist,piece_moves)
         end
         pawn_moves = get_moves(Pawn(),ally[end],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
-        rookpins,bishoppins,isWhite,legal_info)
+        rookpins,bishoppins,isWhite,kingpos,legal_info)
         movelist = vcat(movelist,pawn_moves)
     end
 
@@ -1010,7 +1033,7 @@ function make_move!(move::Move,board::Boardstate)
 
     #update EnPassant
     if move.flag == DPUSH
-        location = EPlocation(move.to,ColID)
+        location = EPlocation(move.to,ColId)
         board.EnPass = UInt64(1) << location
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)

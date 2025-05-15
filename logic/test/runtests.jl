@@ -218,7 +218,25 @@ function test_pawns()
     @assert count(i->(i.piece_type==val(Pawn())),moves) == 3 "Pinned/blocked by bishop"
     @assert count(i->(i.capture_type==val(Bishop())),moves) == 1 "Capture bishop along pin"
 
-    EPfen = "8/3p4/7R/k6R/7R/8/8/8 b - - 0 1"
+    promFEN = "K3r4/1r2P3/8/8/8/8/8/8 w - - 0 1"
+    board = Boardstate(promFEN)
+    moves = generate_moves(board)
+    @assert length(findall(i->i.flag==PROMQUEEN,moves)) == 1 "One of each promote type Q"
+    @assert length(findall(i->i.flag==PROMROOK,moves)) == 1 "One of each promote type R"
+    @assert length(findall(i->i.flag==PROMBISHOP,moves)) == 1 "One of each promote type B"
+    @assert length(findall(i->i.flag==PROMKNIGHT,moves)) == 1 "One of each promote type N"
+    @assert length(findall(i->i.capture_type==val(Rook()),moves)) == 4 "Must capture rook" 
+
+    checkFEN = "8/8/R7/pppppppk/5R1R/8/8/7K b - - 1 1"
+    board = Boardstate(checkFEN)
+    moves = generate_moves(board)
+    @assert length(moves) == 1
+    @assert moves[1].piece_type == val(Pawn()) "only pawn can capture"
+end
+test_pawns()
+
+function testEP()
+    EPfen = "8/3p4/7R/k6R/P6R/8/8/8 b - a3 0 1"
     board = Boardstate(EPfen)
     moves = generate_moves(board)
 
@@ -227,8 +245,24 @@ function test_pawns()
 
     make_move!(moves[1],board)
     @assert board.EnPass == UInt64(1) << 19 "En-passant square created by double push"
+
+    newFEN = "8/8/8/7k/ppppppP1/8/8/7K b - g3 1 1"
+    board = Boardstate(newFEN)
+    moves = generate_moves(board)
+    @assert length(moves) == 6
+    @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can EP capture out of check"
+
+    newFEN = "k6R/8/8/8/ppppppP1/8/8/7K b - g3 1 1"
+    board = Boardstate(newFEN)
+    moves = generate_moves(board)
+    @assert length(findall(i->i.piece_type==val(Pawn()),moves)) == 0 "Can't EP when in check"
+
+    newFEN = "8/8/8/K1pPr/8/8/8/8 w - c6 1 1"
+    board = Boardstate(newFEN)
+    moves = generate_moves(board)
+    @assert length(findall(i->i.flag==EPFLAG,moves)) == 0 "Can't EP as pinned by rook"
 end
-test_pawns()
+testEP()
 
 function test_attckpcs()
     simpleFEN = "8/p2n4/1K5r/8/8/8/8/6b1 w - - 0 1"

@@ -156,55 +156,50 @@ function mouse_clicked(mouse_pos,legal_moves,kingpos)
     return highlight
 end
 
-function promote_squares!(highlight,position,prompos,ColourID)
-    inc = ifelse(ColourID==0,8,-8)
-    highlight .= []
-    Ptype = [val(Queen()),val(Rook()),val(Bishop()),val(Knight())]
-    for i in 0:3
-        push!(highlight,prompos+inc)
-        position[prompos+inc] .= Ptype[i+1+ColourID]
-    end
+function promote_move!(logicstate,index,legal_moves)
+    promotype = [PROMQUEEN,PROMROOK,PROMBISHOP,PROMKNIGHT]
+
+    moveID = findfirst(i->i.flag==promotype[index],legal_moves)
+    make_move!(legal_moves[moveID],logicstate)
 end
 
-"update logic with move made"
-function move_clicked!(position,highlight,move_from,mouse_pos,kingpos,legal_moves,promote,logicstate)
-    promote_move = false
-    if !promote
-        for move in legal_moves
-            if (move.to == mouse_pos) & (move.from == move_from)
-                if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
-                    promote_move = true
-                else
-                    make_move!(move,logicstate)
-                end
-            #check for castling moves
-            elseif move_from == kingpos
-                if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
-                    make_move!(move,logicstate)
-                elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
-                    make_move!(move,logicstate)
-                end
+function promote_squares(prompos,Whitesmove,position)
+    inc = ifelse(Whitesmove==0,8,-8)
+    highlight = []
+    Ptype = [val(Queen()),val(Rook()),val(Bishop()),val(Knight())]
+    for i in 0:3
+        pos = prompos+i*inc
+        push!(highlight,pos)
+        position[pos+1] = Ptype[i+1]+Whitesmove*Black
+    end
+    return highlight,position
+end
+
+"update logic with move made and return true if trying to promote"
+function move_clicked!(logicstate,move_from,mouse_pos,kingpos,legal_moves)
+    for move in legal_moves
+        if (move.to == mouse_pos) & (move.from == move_from)
+            if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
+                return true
+            else
+                make_move!(move,logicstate)
+                return false
+            end
+        #check for castling moves
+        elseif move_from == kingpos
+            if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
+                make_move!(move,logicstate)
+                return false
+            elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
+                make_move!(move,logicstate)
+                return false
             end
         end
-    else
-        println("promote on $move_from")
-    end
-
-    if promote_move
-        promote_squares!(highlight,position,mouse_pos,logicstate.ColourIndex)
-        promote = true
-    else
-        #update positions of pieces in GUI representation
-        position .= GUIposition(logicstate)
-        #generate new set of moves
-        legal_moves .= generate_moves(logicstate)
-        highlight .= []
-        move_from = -1
     end
 end
 
 "display pieces and chessboard on screen. enable clicking to show and make legal moves"
-function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,DEBUG=false)
+function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
     legal_moves = generate_moves(logicstate)
@@ -239,15 +234,31 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,D
                     mouse_pos = board_coords(xpos,ypos,square_width)
                     kingpos = trailing_zeros(ally_pieces(logicstate)[val(King())])
 
-                    if (length(highlight_moves) > 0) & !DEBUG
+                    if (length(highlight_moves) > 0)
                         if mouse_pos in highlight_moves
-                            #make move in logic then update GUI to reflect new board
-                            move_clicked!(position,highlight_moves,sq_clicked,mouse_pos,kingpos,legal_moves,promote,logicstate)
+                            if promoting
+                                index = findfirst(i->i==mouse_pos,highlight_moves)
+                                promote_move!(logicstate,index,legal_moves)
+                                promoting = false
+                            else
+                                #make move in logic then update GUI to reflect new board
+                                promoting = move_clicked!(logicstate,sq_clicked,mouse_pos,kingpos,legal_moves)
+                            end
+
+                            if promoting
+                                highlight_moves,position = promote_squares(mouse_pos,logic.ColID(logicstate.ColourIndex),position)
+                            else
+                                #update positions of pieces in GUI representation
+                                position = GUIposition(logicstate)
+                                #generate new set of moves
+                                legal_moves = generate_moves(logicstate)
+                                highlight_moves = []
+                            end
                         else
                             #reset square clicked on to nothing
                             highlight_moves = []
-                            sq_clicked = -1
                         end
+                        sq_clicked = -1
                     else
                         highlight_moves = mouse_clicked(mouse_pos,legal_moves,kingpos)
                         sq_clicked = mouse_pos
@@ -294,8 +305,9 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1"
-    FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    FEN = "8/8/8/K1pPr/8/8/8/7k w - c6 1 1"
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    #FEN = "k6R/8/8/8/ppppppP1/8/8/7K b - g3 1 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
