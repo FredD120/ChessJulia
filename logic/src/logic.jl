@@ -775,11 +775,11 @@ end
 
 "returns false if it fails edge case where EP exposes attack on king"
 function EPedgecase(from,EPcap,kingpos,all_pcs,enemy_vec)
-    if (from % 8) == (kingpos % 8) 
+    if (from >> 3) == (kingpos >> 3) 
         #all pcs BB after en-passant
         after_EP = setzero(setzero(all_pcs,from),EPcap)
         kingrookmvs = possible_moves(Rook(),kingpos,after_EP)
-        if kingrookmvs & (enemy_vec[val(Rook())] | enemy_vec[val(Queen())]) > 0
+        if (kingrookmvs & (enemy_vec[val(Rook())] | enemy_vec[val(Queen())])) > 0
             return false
         end
     end
@@ -789,7 +789,7 @@ end
 "Check legality of en-passant before adding it to move list"
 function push_EP!(moves,from,to,shift,checks,all_pcs,enemy_vec,kingpos)
     EPcap = to+shift
-    if setzero(checks,EPcap) == 0
+    if checks & (UInt64(1) << EPcap) > 0
         if EPedgecase(from,EPcap,kingpos,all_pcs,enemy_vec)
             push!(moves,Move(val(Pawn()),from,to,val(Pawn()),EPFLAG))
         end
@@ -1038,7 +1038,7 @@ function make_move!(move::Move,board::Boardstate)
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
     elseif board.EnPass > 0
-        board.EnPass == UInt64(0)
+        board.EnPass = UInt64(0)
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
     else

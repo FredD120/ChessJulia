@@ -1,7 +1,7 @@
 using logic
 using BenchmarkTools
 
-const expensive = false
+const expensive = true
 const verbose = true
 
 const FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -246,11 +246,25 @@ function testEP()
     make_move!(moves[1],board)
     @assert board.EnPass == UInt64(1) << 19 "En-passant square created by double push"
 
+    EPfen = "8/8/7k/8/Pp6/8/8/K b - a3 0 1"
+    board = Boardstate(EPfen)
+    moves = generate_moves(board)
+    @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can en-passant"
+    kingmv = findfirst(i->i.piece_type==val(King()),moves)
+    make_move!(moves[kingmv],board)
+    @assert board.EnPass == 0 "Should clear EP bitboard"
+
     newFEN = "8/8/8/7k/ppppppP1/8/8/7K b - g3 1 1"
     board = Boardstate(newFEN)
     moves = generate_moves(board)
     @assert length(moves) == 6
     @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can EP capture out of check"
+
+    newFEN = "K7/8/8/2pP4/8/8/8/7b w - c6 1 1"
+    board = Boardstate(newFEN)
+    moves = generate_moves(board)
+    @assert length(moves) == 4
+    @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can EP along bishop pin"
 
     newFEN = "k6R/8/8/8/ppppppP1/8/8/7K b - g3 1 1"
     board = Boardstate(newFEN)

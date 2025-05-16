@@ -305,9 +305,8 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "8/8/8/K1pPr/8/8/8/7k w - c6 1 1"
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
-    #FEN = "k6R/8/8/8/ppppppP1/8/8/7K b - g3 1 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    #FEN = "8/8/8/K1pP31/7q/8/8/7k w - c6 1 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
