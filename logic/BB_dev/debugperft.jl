@@ -26,33 +26,38 @@ function comparePerft()
         end
     end
 end
-#comparePerft()
 
 function readPerft(depth)
-    data = Dict{String,Int}()
+    FENs = String[]
+    Depths = Int[]
+    Targets = Int[]
+
     data_str = readlines("$(dirname(@__DIR__))/BB_dev/perftsuite.txt")
     for d in data_str
         arr = split(d," ;")
-        FEN = arr[1]
+        push!(FENs, arr[1])
+
+        depth = min(depth,length(arr)-1)
         leaves = split(arr[depth+1])[end]
         
-        data[FEN] = parse(Int,leaves)
+        push!(Targets,parse(Int,leaves))
+        push!(Depths,depth)
     end   
-    return data
+    return FENs,Depths,Targets
 end
 
-function perft_suite(depth)
+function perft_suite(dep)
     Δt = 0
     leaves = 0
-    perft_dict = readPerft(depth)
+    FENs,Depths,Targets = readPerft(dep)
 
-    for (FEN,target) in perft_dict
+    for (FEN,depth,target) in zip(FENs,Depths,Targets)
         board = Boardstate(FEN)
         if verbose
             println("Testing position: $FEN")
         end
         t = time()
-        cur_leaves = perft(board,depth)
+        cur_leaves = perft(board,depth,true)
         Δt += time() - t
         leaves += cur_leaves
 
@@ -60,4 +65,19 @@ function perft_suite(depth)
     end
     println("Perft complete. Total leaf nodes found: $leaves. NPS = $(leaves/Δt) nodes/second")
 end
-perft_suite(2)
+
+function single_perft(FEN,depth)
+    board = Boardstate(FEN)
+    t = time()
+    leaves = perft(board,depth,true)
+    Δt = time() - t
+    println("Perft complete. Total nodes = $leaves NPS = $(leaves/Δt)")
+end
+
+function main()
+    #comparePerft()
+    perft_suite(6)
+    #single_perft("r6r/6k1/8/8/8/8/8/R3K1R1 b Q - 0 1",6)
+end
+main()
+

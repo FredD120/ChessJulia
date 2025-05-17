@@ -626,9 +626,10 @@ test_perft()
 function test_speed()
     FENs = ["nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1",
     "bbbqknbq/8/8/8/8/8/8/QNNNKBBQ w - 0 1",
-    "r3k2r/4q1b1/bn3n2/4N3/8/2N2Q2/3BB3/R3K2R w KQkq -"]
-    Depths = [5,4,4]
-    Targets = [11813050,7466475,7960855]
+    "r3k2r/4q1b1/bn3n2/4N3/8/2N2Q2/3BB3/R3K2R w KQkq -",
+    "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"]
+    Depths = [5,4,4,4]
+    Targets = [11813050,7466475,7960855,4085603]
     Δt = 0
     leaves = 0
 

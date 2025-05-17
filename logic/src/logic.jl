@@ -4,6 +4,7 @@ module logic
 #Are tuples better than vectors for data known at compile time?
 #How much data is being passed around by functions unnecessarily?
 #Is there code branching due to type instability?
+#Pawn code is noticeably slower (due to branching?)
 #Decide function once then repeatedly call it (functions have different types -> type instability)
 #Vs call function repeatedly and choose each time (for only two cheap functions is ok)
 #Can force definite types for function dispatch, will create union of types that are slow if too many
@@ -15,14 +16,8 @@ To check generated code:
 =#
 
 ###TODO###
-#Add en-passant moves
-#Add promotions
-#Add doublepush flag
-#Handle above in move maker/unmaker
-#Add pawn attacks to all attacks BB for king legality
-#Check for illegal EP when rook sees king through pawns
-#Write tests for above
 #Parse perft file and run
+#Fix castle
 
 
 export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
@@ -234,16 +229,22 @@ function ZhashEP!(ZHash,enpassant)
     for EP in identify_locations(enpassant)
         file = EP % 8
         #use first rank of black pawns
-        ZHash ⊻= ZobristKeys[12*(11)+file+1]
+        ZHash ⊻= ZobristKeys[64*(11)+file+1]
     end
 end
+
+"Returns zobrist key associated with a coloured piece at a location"
+ZKey_piece(CpieceID,pos) = ZobristKeys[64*(CpieceID-1)+pos+1]
+
+"Returns zobrist key associated with whose turn it is (switched on if black)"
+ZKeyColour() = ZobristKeys[end]
 
 "Generate Zobrist hash of a boardstate"
 function generate_hash(pieces,Whitesmove,castling,enpassant)
     ZHash = UInt64(0)
     for (pieceID,pieceBB) in enumerate(pieces)
         for loc in identify_locations(pieceBB)
-            ZHash ⊻= ZobristKeys[12*(pieceID-1)+loc+1]
+            ZHash ⊻= ZKey_piece(pieceID,loc)
         end
     end
 
@@ -253,7 +254,7 @@ function generate_hash(pieces,Whitesmove,castling,enpassant)
     Zhashcastle!(ZHash,castling)
 
     if !Whitesmove
-        ZHash ⊻= ZobristKeys[end]
+        ZHash ⊻= ZKeyColour()
     end
     return ZHash
 end
@@ -902,13 +903,13 @@ end
 "utilises setzero to remove a piece from a position"
 function destroy_piece!(B::Boardstate,CpieceID,pos)
     B.pieces[CpieceID] = setzero(B.pieces[CpieceID],pos)
-    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+pos+1]
+    B.ZHash ⊻= ZKey_piece(CpieceID,pos)
 end
 
 "utilises setone to create a piece in a position"
 function create_piece!(B::Boardstate,CpieceID,pos)
     B.pieces[CpieceID] = setone(B.pieces[CpieceID],pos)
-    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+pos+1]
+    B.ZHash ⊻= ZKey_piece(CpieceID,pos)
 end
 
 "utilises create and destroy to move single piece"
@@ -920,23 +921,23 @@ end
 "switch to opposite colour and update hash key"
 function swap_player!(board)
     board.ColourIndex = Opposite(board.ColourIndex)
-    board.ZHash ⊻= ZobristKeys[end]
+    board.ZHash ⊻= ZKeyColour()
 end
 
 "make a kingside castle"
 function Kcastle!(B::Boardstate,CpieceID)
-    kingpos = trailing_zeros(ally_pieces(B)[val(King())])
-    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+1]
+    kingpos = trailing_zeros(B.pieces[val(King())])
+    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos)
     B.pieces[CpieceID] = B.pieces[CpieceID] << 2
-    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+3]
+    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos+2)
 end 
 
 "make a queenside castle"
 function Qcastle!(B::Boardstate,CpieceID)
-    kingpos = trailing_zeros(ally_pieces(B)[val(King())])
-    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos+1]
+    kingpos = trailing_zeros(B.pieces[val(King())])
+    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos)
     B.pieces[CpieceID] = B.pieces[CpieceID] >> 2
-    B.ZHash ⊻= ZobristKeys[12*(CpieceID-1)+kingpos-1]
+    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos-2)
 end
 
 "update castling rights and Zhash"
@@ -985,7 +986,7 @@ function make_move!(move::Move,board::Boardstate)
 
     #update castling rights if not castling    
     else
-        if get_Crights(board.Castle,(ColId+1)%2,0) > 0
+        if board.Castle > 0
             if move.piece_type == val(King())
                 updateCrights!(board,ColId,0)
             else
@@ -995,12 +996,12 @@ function make_move!(move::Move,board::Boardstate)
                 elseif move.from == 56-56*ColId #queenside
                     updateCrights!(board,ColId,2)
                 end
-                #remove enemy castle rights
-                if move.to == 7+56*ColId        #kingside
-                    updateCrights!(board,(ColId+1)%2,1)
-                elseif move.to == 56*ColId      #queenside
-                    updateCrights!(board,(ColId+1)%2,2)
-                end
+            end
+            #remove enemy castle rights
+            if move.to == 7+56*ColId        #kingside
+                updateCrights!(board,(ColId+1)%2,1)
+            elseif move.to == 56*ColId      #queenside
+                updateCrights!(board,(ColId+1)%2,2)
             end
         end
         #deal with promotions, always reset halfmove clock

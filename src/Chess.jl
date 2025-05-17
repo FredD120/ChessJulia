@@ -218,6 +218,8 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
                     close = true
                     break 
                 elseif UNMAKE & (evt_ty == SDL_KEYUP)
+                    #println(perft(logicstate,2,true))
+                    
                     #step backwards in move history
                     unmake_move!(logicstate)
                     #update positions of pieces in GUI representation
@@ -227,6 +229,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
                     #reset square clicked on to nothing
                     highlight_moves = []
                     sq_clicked = -1
+                    
                 elseif evt_ty == SDL_MOUSEBUTTONUP
                     mouse_evt = getproperty(evt,:button)
                     xpos = getproperty(mouse_evt,:x)
@@ -305,8 +308,8 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
-    #FEN = "8/8/8/K1pP31/7q/8/8/7k w - c6 1 1"
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    FEN = "r3k2r/8/8/8/8/8/8/R3K1R1 b Qkq - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
