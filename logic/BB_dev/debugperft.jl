@@ -76,8 +76,8 @@ end
 
 function main()
     #comparePerft()
-    perft_suite(6)
-    #single_perft("r6r/6k1/8/8/8/8/8/R3K1R1 b Q - 0 1",6)
+    #perft_suite(6)
+    single_perft("nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1",5)
 end
 main()
 

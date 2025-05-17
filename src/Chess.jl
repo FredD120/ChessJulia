@@ -1,6 +1,7 @@
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 using logic
+import RevisionistV01 as bot
 #using libpng_jll
 
 "initialise window and renderer in SDL"
@@ -156,11 +157,11 @@ function mouse_clicked(mouse_pos,legal_moves,kingpos)
     return highlight
 end
 
-function promote_move!(logicstate,index,legal_moves)
+function promote_move!(logicstate,index,legal_moves,BOT)
     promotype = [PROMQUEEN,PROMROOK,PROMBISHOP,PROMKNIGHT]
 
     moveID = findfirst(i->i.flag==promotype[index],legal_moves)
-    make_move!(legal_moves[moveID],logicstate)
+    GUImove!(legal_moves[moveID],logicstate,BOT)
 end
 
 function promote_squares(prompos,Whitesmove,position)
@@ -176,30 +177,56 @@ function promote_squares(prompos,Whitesmove,position)
 end
 
 "update logic with move made and return true if trying to promote"
-function move_clicked!(logicstate,move_from,mouse_pos,kingpos,legal_moves)
+function move_clicked!(logicstate,move_from,mouse_pos,kingpos,legal_moves,BOT)
     for move in legal_moves
         if (move.to == mouse_pos) & (move.from == move_from)
             if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
                 return true
             else
-                make_move!(move,logicstate)
+                GUImove!(move,logicstate,BOT)
                 return false
             end
         #check for castling moves
         elseif move_from == kingpos
             if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
-                make_move!(move,logicstate)
+                GUImove!(move,logicstate,BOT)
                 return false
             elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
-                make_move!(move,logicstate)
+                GUImove!(move,logicstate,BOT)
                 return false
             end
         end
     end
 end
 
+"Prints the winner and returns true if game is over"
+function check_win(logicstate::Boardstate)
+    if logicstate.State != Neutral()
+        if logicstate.State == Draw()
+            println("Game over: Draw")
+        elseif Whitesmove(logicstate.ColourIndex)
+            println("Game over: Black wins")
+        else
+            println("Game over: White wins")
+        end
+        return true
+    else
+        return false
+    end
+end
+    
+"Encapsulates behaviour of PvP vs PvE"
+function GUImove!(move,board,vsBOT)
+    make_move!(move,board)
+    moves = generate_moves(board)
+    if vsBOT && !check_win(board)
+        botmove = bot.best_move(board,moves)
+        make_move!(botmove,board)
+    end
+end
+
 "display pieces and chessboard on screen. enable clicking to show and make legal moves"
-function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
+function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,vsBOT=false)
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
     legal_moves = generate_moves(logicstate)
@@ -221,7 +248,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
                     #println(perft(logicstate,2,true))
                     
                     #step backwards in move history
-                    unmake_move!(logicstate)
+                    un!(logicstate)
                     #update positions of pieces in GUI representation
                     position = GUIposition(logicstate)
                     #generate new set of moves
@@ -241,11 +268,11 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
                         if mouse_pos in highlight_moves
                             if promoting
                                 index = findfirst(i->i==mouse_pos,highlight_moves)
-                                promote_move!(logicstate,index,legal_moves)
+                                promote_move!(logicstate,index,legal_moves,vsBOT)
                                 promoting = false
                             else
                                 #make move in logic then update GUI to reflect new board
-                                promoting = move_clicked!(logicstate,sq_clicked,mouse_pos,kingpos,legal_moves)
+                                promoting = move_clicked!(logicstate,sq_clicked,mouse_pos,kingpos,legal_moves,vsBOT)
                             end
 
                             if promoting
@@ -266,16 +293,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN)
                         highlight_moves = mouse_clicked(mouse_pos,legal_moves,kingpos)
                         sq_clicked = mouse_pos
                     end
-                    if logicstate.State != Neutral()
-                        if logicstate.State == Draw()
-                            println("Game over: Draw")
-                        elseif Whitesmove(logicstate.ColourIndex)
-                            println("Game over: Black wins")
-                        else
-                            println("Game over: White wins")
-                        end
-                        break
-                    end
+                    close = check_win(logicstate)
                 end
             end
 
@@ -309,7 +327,7 @@ end
 function main()
     #SDL_Quit()
     #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
-    FEN = "r3k2r/8/8/8/8/8/8/R3K1R1 b Qkq - 0 1"
+    FEN = "r3k2r/8/8/8/8/8/8/4K3 b Qkq - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
@@ -319,7 +337,7 @@ function main()
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
     bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
-    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN)
+    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN,true)
 
 end
 main()

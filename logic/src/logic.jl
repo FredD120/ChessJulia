@@ -15,12 +15,7 @@ To check generated code:
 @code_warntype
 =#
 
-###TODO###
-#Parse perft file and run
-#Fix castle
-
-
-export GUIposition, Boardstate, make_move!, unmake_move!, UCImove,
+export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
 King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
@@ -856,7 +851,7 @@ end
 function generate_moves(board::Boardstate)::Vector{Move}
     movelist = Vector{Move}()
     #implement 50 move rule and 3 position repetition
-    if (board.Data.Halfmoves[end] >= 100) | (count(i->(i==board.ZHash),board.Data.ZHashHist) >= 3)
+    if (board.Data.Halfmoves[end] >= 100) || (count(i->(i==board.ZHash),board.Data.ZHashHist) >= 3)
         board.State = Draw()
     else
 

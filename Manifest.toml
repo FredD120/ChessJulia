@@ -2,7 +2,7 @@
 
 julia_version = "1.11.4"
 manifest_format = "2.0"
-project_hash = "f4710d194cf17dfc9a7e077d3ebfaf8f08f2a3bc"
+project_hash = "cd72910593af08bebb6b7c3f0ebaa503b8bd697f"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -474,6 +474,12 @@ git-tree-sha1 = "62389eeff14780bfe55195b7204c0d8738436d64"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.1"
 
+[[deps.RevisionistV01]]
+deps = ["Random", "logic"]
+path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV01"
+uuid = "2ba3440e-9551-40af-bd9f-ce36b41a2b46"
+version = "0.0.1"
+
 [[deps.SBC_jll]]
 deps = ["Libdl", "Pkg", "libsndfile_jll"]
 git-tree-sha1 = "34755bff50b6b08988cdfe5fee69c1c1b24ff810"
@@ -768,7 +774,7 @@ version = "1.4.0+0"
 deps = ["InteractiveUtils", "JLD2", "Random"]
 path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\logic"
 uuid = "71af330d-9551-40af-bd9f-dd36b4d12b46"
-version = "0.0.7"
+version = "1.0.0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
