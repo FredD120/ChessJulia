@@ -1,7 +1,7 @@
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 using logic
-import RevisionistV01 as bot
+import RevisionistV02 as bot
 #using libpng_jll
 
 "initialise window and renderer in SDL"
@@ -220,7 +220,7 @@ function GUImove!(move,board,vsBOT)
     make_move!(move,board)
     moves = generate_moves(board)
     if vsBOT && !check_win(board)
-        botmove = bot.best_move(board,moves)
+        botmove = bot.best_move(board,moves,4,true)
         make_move!(botmove,board)
     end
 end
@@ -233,7 +233,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,v
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     promoting = false
-    UNMAKE = true           #allow unmaking moves
+    UNMAKE = true         #allow unmaking moves (not allowed vs engine)
     try
         close = false
         while !close
@@ -245,10 +245,12 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,v
                     close = true
                     break 
                 elseif UNMAKE & (evt_ty == SDL_KEYUP)
-                    #println(perft(logicstate,2,true))
-                    
                     #step backwards in move history
-                    un!(logicstate)
+                    unmake_move!(logicstate)
+                    if vsBOT #need to undo bots turn as well
+                       unmake_move!(logicstate) 
+                    end
+
                     #update positions of pieces in GUI representation
                     position = GUIposition(logicstate)
                     #generate new set of moves
@@ -326,8 +328,8 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
-    FEN = "r3k2r/8/8/8/8/8/8/4K3 b Qkq - 0 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    #FEN = "k6q/8/8/8/8/8/8/B6K b - - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)

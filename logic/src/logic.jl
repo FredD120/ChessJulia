@@ -8,6 +8,7 @@ module logic
 #Decide function once then repeatedly call it (functions have different types -> type instability)
 #Vs call function repeatedly and choose each time (for only two cheap functions is ok)
 #Can force definite types for function dispatch, will create union of types that are slow if too many
+#Might want to fold move struct into single 32 bit int and create helper functions to decode
 #=
 To check generated code:
 @code_llvm
@@ -17,9 +18,10 @@ To check generated code:
 
 export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
-King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val,
+King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
-PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces
+PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations,
+NULLMOVE
 
 using InteractiveUtils
 using JLD2
@@ -75,6 +77,8 @@ struct Move
     capture_type::UInt8
     flag::UInt8
 end
+
+const NULLMOVE = Move(0,0,0,0,0)
 
 Base.show(io::IO,m::Move) = print(io,"From=$(Int(m.from));To=$(Int(m.to));PieceId=$(Int(m.piece_type));Capture ID=$(Int(m.capture_type));Flag=$(Int(m.flag))")
 

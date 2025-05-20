@@ -84,7 +84,7 @@ test_iterators()
 
 function test_identifylocs()
     BB = UInt64(1) << 15 | UInt64(1) << 10
-    locs = logic.identify_locations(BB)
+    locs = identify_locations(BB)
     @assert length(locs) == 2
     @assert locs[1] * locs[2] == 150
 end
@@ -109,19 +109,19 @@ function test_legalinfo()
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
-    @assert length(logic.identify_locations(info.blocks)) == 6 "6 squares blocking bishop"
+    @assert length(identify_locations(info.blocks)) == 6 "6 squares blocking bishop"
 
     simpleFEN = "K7/7R/8/8/8/8/8/qq6 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
     info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
-    @assert length(logic.identify_locations(info.blocks)) == 6 "6 squares blocking queen attack"
+    @assert length(identify_locations(info.blocks)) == 6 "6 squares blocking queen attack"
 
     simpleFEN = "4k3/8/8/8/4q3/8/4B3/1Q2K3 w - 0 1"
     board = Boardstate(simpleFEN)  
     all_pcs = logic.BBunion(board.pieces)
     kingBB = logic.ally_pieces(board)[val(King())]
-    kingpos = logic.identify_locations(kingBB)[1]
+    kingpos = identify_locations(kingBB)[1]
     info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,true)
 
     @assert info.blocks == typemax(UInt64)
@@ -138,7 +138,7 @@ function testpins()
 
     rookpins,bishoppins = logic.detect_pins(0,enemy,all_pcs,ally_pcs)
 
-    @assert length(logic.identify_locations(rookpins)) == 7
+    @assert length(identify_locations(rookpins)) == 7
     @assert bishoppins == 0
 
     simpleFEN = "4k3/8/8/8/4b3/8/4B3/1Q2K3 w - 0 1"
@@ -147,7 +147,7 @@ function testpins()
     ally_pcs = logic.BBunion(logic.ally_pieces(board))
     enemy = logic.enemy_pieces(board)
     kingBB = logic.ally_pieces(board)[val(King())]
-    kingpos = logic.identify_locations(kingBB)[1]
+    kingpos = identify_locations(kingBB)[1]
 
     rookpins,bishoppins = logic.detect_pins(kingpos,enemy,all_pcs,ally_pcs)
     @assert rookpins == 0
@@ -282,7 +282,7 @@ function test_attckpcs()
     simpleFEN = "8/p2n4/1K5r/8/8/8/8/6b1 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    kingpos = logic.identify_locations(board.pieces[val(King())])[1]
+    kingpos = identify_locations(board.pieces[val(King())])[1]
 
     checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,true)
     @assert checkers == (UInt64(1)<<8)|(UInt64(1)<<11)|(UInt64(1)<<23)|(UInt64(1)<<62) "2 sliding piece attacks, a knight and a pawn"

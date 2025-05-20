@@ -1,5 +1,9 @@
 module RevisionistV01
 
+#=
+Plays totally random moves
+=#
+
 using logic
 using Random
 rng = Xoshiro(2000)
