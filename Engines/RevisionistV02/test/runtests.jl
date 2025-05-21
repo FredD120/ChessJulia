@@ -32,6 +32,33 @@ function test_best()
     ind = findfirst(i->i.capture_type==val(Queen()),moves)
 
     @assert best == moves[ind] "Bishop should capture queen as white"
+
+    #mate in 2
+    FEN = "K7/R7/R7/8/8/8/8/7k w - - 0 1" 
+    board = Boardstate(FEN)
+    moves = generate_moves(board)
+    best = best_move(board,moves)
+    #rook moves to cut off king
+    make_move!(best,board)
+    moves = generate_moves(board)
+    #king response doesn't matter
+    make_move!(moves[1],board)
+    moves = generate_moves(board)
+    best = best_move(board,moves)
+    make_move!(best,board)
+    moves = generate_moves(board)
+
+    println(GUIposition(board))
+    
+    @assert board.State == Loss() "Checkmate in 2 moves"
+
+    FEN = "k7/8/8/8/8/8/5K2/7q b - - 0 1"
+    board = Boardstate(FEN)
+    moves = generate_moves(board)
+    best = best_move(board,moves)
+    ind = findfirst(i->i.to==62,moves)
+
+    @assert best != moves[ind] "Queen should not allow itself to be captured"
 end
 test_best()
 

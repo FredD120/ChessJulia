@@ -315,7 +315,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,v
 
             render_pieces(renderer,square_width,position,tex_vec)
 
-            SDL_RenderPresent(renderer)
+            SDL_RenderPresent(renderer) 
 
             SDL_Delay(1000 ÷ 60)
         end
@@ -328,8 +328,8 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
-    #FEN = "k6q/8/8/8/8/8/8/B6K b - - 0 1"
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1"
+    FEN = "k7/r7/r7/8/8/8/8/7K w - - 0 1" 
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
