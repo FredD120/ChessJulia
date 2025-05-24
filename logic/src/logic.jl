@@ -17,27 +17,32 @@ To check generated code:
 =#
 
 export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove,
-Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
-King, Queen, Rook, Bishop, Knight, Pawn, White, Black, val, piecetypes,
+Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft, Piece,
+King, Queen, Rook, Bishop, Knight, Pawn, White, Black, white, black, val, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations,
-NULLMOVE
+NULLMOVE, rank, file
 
 using InteractiveUtils
 using JLD2
 using Random
+using StaticArrays
 rng = Xoshiro(2955)
 
 const White = UInt8(0)
 const Black = UInt8(6)
 const NULL_PIECE = UInt8(0)
 
-struct King end
-struct Queen end
-struct Rook end
-struct Bishop end
-struct Knight end
-struct Pawn end
+abstract type Piece end
+struct King <:Piece end
+struct Queen <:Piece end
+struct Rook <:Piece end
+struct Bishop <:Piece end
+struct Knight <:Piece end
+struct Pawn <:Piece end
+
+struct white end
+struct black end
 
 const piecetypes = [King(),Queen(),Rook(),Bishop(),Knight(),Pawn()]
 
@@ -48,6 +53,10 @@ val(::Rook) = UInt8(3)
 val(::Bishop) = UInt8(4)
 val(::Knight) = UInt8(5)
 val(::Pawn) = UInt8(6)
+
+"Return index shift associated with colour"
+val(::white) = UInt8(0)
+val(::black) = UInt8(6)
 
 Base.string(::King) = "King"
 Base.string(::Queen) = "Queen"
@@ -69,6 +78,11 @@ const PROMBISHOP = UInt8(7)
 const PROMKNIGHT = UInt8(8)
 
 struct Promote end
+
+"Get a rank from a 0-63 index"
+rank(ind) = 7 - (ind >> 3)
+"Get a file from a 0-63 index"
+file(ind) = ind % 8
 
 struct Move
     piece_type::UInt8
@@ -93,10 +107,10 @@ function read_txt(filename)
 end
 
 struct Move_BB
-    king::Vector{UInt64}
-    knight::Vector{UInt64}
-    CRightsMask::Vector{UInt8}
-    CastleCheck::Vector{UInt64}
+    king::SVector{64,UInt64}
+    knight::SVector{64,UInt64}
+    CRightsMask::SVector{6,UInt8}
+    CastleCheck::SVector{6,UInt64}
 end
 
 "constructor for Move_BB that reads all moves from txt files"
@@ -116,7 +130,7 @@ struct Magic
     BitShift::UInt8
     Attacks::Vector{UInt64}
 end
-
+    
 function read_magics(piece)
     path = "$(dirname(@__DIR__))/move_BBs/Magic$(piece)s.jld2"
     Masks = UInt64[]
@@ -131,10 +145,7 @@ function read_magics(piece)
         AttackVec = file["AttackVec"]
     end
 
-    MagicVec = Magic[]
-    for (mask,magic,shift,attacks) in zip(Masks,Magics,BitShifts,AttackVec)
-        push!(MagicVec,Magic(magic,mask,shift,attacks))
-    end
+    MagicVec = @SVector [Magic(Magics[i],Masks[i],BitShifts[i],AttackVec[i]) for i in 1:64]
     return MagicVec
 end
 
