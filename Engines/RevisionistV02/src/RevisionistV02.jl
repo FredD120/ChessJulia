@@ -7,7 +7,7 @@ Minimax with alpha beta pruning tree search
 
 using logic
 using StaticArrays
-export best_move,evaluate,eval
+export best_move,evaluate,eval,side_index
 
 #define evaluation constants
 eval(::Pawn) = Float32(100)
@@ -29,15 +29,17 @@ function get_PST(type)
 end
 
 const PawnPST::SVector{64,Float32} = get_PST("pawn")
+const KnightPST::SVector{64,Float32} = get_PST("knight")
 
 PST(::Piece, index) = Float32(0)
-PST(::Pawn, index) = PawnPST[index]
+PST(::Pawn, index) = PawnPST[index+1]
+PST(::Knight, index) = KnightPST[index+1]
 
 "Index into PST"
 side_index(::white, ind) = ind
 
 "Reverse rank order to access PSTs as black"
-side_index(::black, ind) = 8*(7 - rank(ind)) + file(ind)
+side_index(::black, ind) = 8*rank(ind) + file(ind)
 
 mutable struct Logger
     best_score::Int32
@@ -65,7 +67,7 @@ function evaluate(board::Boardstate)::Int32
         for type in piecetypes[2:end]
             for pos in identify_locations(board.pieces[val(colour)+val(type)])
                 score += sgn*eval(type)
-                score += PST(type,side_index(colour,pos))
+                score += sgn*PST(type,side_index(colour,pos))
             end
         end
     end
@@ -150,6 +152,7 @@ function best_move(board::Boardstate,moves::Vector{Move},depth=DEPTH,logging=fal
             println("Zero time spent on eval")
         end
         println("Reached $(logger.terminal) terminal nodes. Move results in evaluation of $(logger.best_score). Took $δt seconds.")
+        println("#######################################################################")
     end
     return best_move
 end

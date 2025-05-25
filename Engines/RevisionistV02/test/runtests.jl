@@ -1,12 +1,22 @@
 using RevisionistV02
 using logic
 
+function test_index()
+    pos = 17
+    @assert rank(pos) == 5
+    @assert file(pos) == 1
+
+    bpos = side_index(black(),pos)
+    @assert rank(bpos) == 2 "Mirrored about the x axis"
+    @assert file(bpos) == 1
+end
+test_index()
+
 function test_eval()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     board = Boardstate(FEN)
     ev = evaluate(board)
 
-    println(ev)
     @assert ev == 0 "Start pos should be neutral"
 
     FEN = "8/P6k/K7/8/8/8/8/8 w - - 0 1"
@@ -16,6 +26,29 @@ function test_eval()
     @assert ev >= eval(val(Pawn())) "Position is worth at least 100 centipawns to white"
 end
 test_eval()
+
+function test_positional()
+    FEN = "1n2k1n1/8/8/8/8/8/8/4K3 b KQkq - 0 1"
+    board = Boardstate(FEN)
+    ev1 = -evaluate(board)
+
+    FEN = "4k3/8/8/3n4/8/4n3/8/4K3 b KQkq - 0 1"
+    board = Boardstate(FEN)
+    ev2 = -evaluate(board)
+
+    @assert ev2 > ev1 "Knights encouraged to be central"
+
+    FEN = "4k3/8/8/8/PP4PP/8/2PPPP2/4K3 w KQkq - 0 1"
+    board = Boardstate(FEN)
+    ev1 = evaluate(board)
+
+    FEN = "4k3/8/8/8/2PPPP2/8/PP4PP/4K3 w KQkq - 0 1"
+    board = Boardstate(FEN)
+    ev2 = evaluate(board)
+
+    @assert ev2 > ev1 "Push central pawns first"
+end
+test_positional()
 
 function test_best()
     FEN = "K6Q/8/8/8/8/8/8/b6k b - - 0 1"
