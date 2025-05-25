@@ -152,7 +152,7 @@ function best_move(board::Boardstate,moves::Vector{Move},depth=DEPTH,logging=fal
             println("Zero time spent on eval")
         end
         println("Reached $(logger.terminal) terminal nodes. Move results in evaluation of $(logger.best_score). Took $δt seconds.")
-        println("#######################################################################")
+        println("################################################################################################################")
     end
     return best_move
 end

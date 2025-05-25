@@ -222,6 +222,7 @@ function GUImove!(move,board,vsBOT)
     if vsBOT && !check_win(board)
         botmove = bot.best_move(board,moves,4,true)
         make_move!(botmove,board)
+        check_win(logicstate)
     end
 end
 
