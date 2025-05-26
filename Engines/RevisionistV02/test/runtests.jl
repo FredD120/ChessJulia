@@ -47,6 +47,16 @@ function test_positional()
     ev2 = evaluate(board)
 
     @assert ev2 > ev1 "Push central pawns first"
+
+    FEN = "4k3/8/8/8/8/8/8/R3K3 w Qkq - 0 1"
+    board = Boardstate(FEN)
+    ev1 = evaluate(board)
+
+    FEN = "4k3/8/8/8/8/8/8/2KR4 w KQkq - 0 1"
+    board = Boardstate(FEN)
+    ev2 = evaluate(board)
+
+    @assert ev2 > ev1 "Castling is positionally favourable"
 end
 test_positional()
 

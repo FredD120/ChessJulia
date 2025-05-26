@@ -222,7 +222,6 @@ function GUImove!(move,board,vsBOT)
     if vsBOT && !check_win(board)
         botmove = bot.best_move(board,moves,4,true)
         make_move!(botmove,board)
-        check_win(logicstate)
     end
 end
 
@@ -296,7 +295,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,v
                         highlight_moves = mouse_clicked(mouse_pos,legal_moves,kingpos)
                         sq_clicked = mouse_pos
                     end
-                    #close = check_win(logicstate)
+                    check_win(logicstate)
                 end
             end
 

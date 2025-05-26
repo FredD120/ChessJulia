@@ -10,6 +10,7 @@ using StaticArrays
 export best_move,evaluate,eval,side_index
 
 #define evaluation constants
+eval(::King) = Float32(0)
 eval(::Pawn) = Float32(100)
 eval(::Queen) = Float32(900)
 eval(::Rook) = Float32(500)
@@ -30,10 +31,17 @@ end
 
 const PawnPST::SVector{64,Float32} = get_PST("pawn")
 const KnightPST::SVector{64,Float32} = get_PST("knight")
+const BishopPST::SVector{64,Float32} = get_PST("bishop")
+const RookPST::SVector{64,Float32} = get_PST("rook")
+const QueenPST::SVector{64,Float32} = get_PST("queen")
+const KingPST::SVector{64,Float32} = get_PST("queen")
 
-PST(::Piece, index) = Float32(0)
 PST(::Pawn, index) = PawnPST[index+1]
 PST(::Knight, index) = KnightPST[index+1]
+PST(::Bishop, index) = BishopPST[index+1]
+PST(::Rook, index) = RookPST[index+1]
+PST(::Queen, index) = QueenPST[index+1]
+PST(::King, index) = KingPST[index+1]
 
 "Index into PST"
 side_index(::white, ind) = ind
@@ -63,8 +71,8 @@ get_player(B::Boardstate)::Int8 = ifelse(B.ColourIndex==0, 1, -1)
 function evaluate(board::Boardstate)::Int32
     score = Float32(0)
 
-    for (colour,sgn) in zip([white(),black()],[+1,-1])
-        for type in piecetypes[2:end]
+    for type in piecetypes[1:end]
+        for (colour,sgn) in zip([white(),black()],[+1,-1])
             for pos in identify_locations(board.pieces[val(colour)+val(type)])
                 score += sgn*eval(type)
                 score += sgn*PST(type,side_index(colour,pos))
