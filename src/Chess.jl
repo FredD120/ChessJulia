@@ -220,7 +220,7 @@ function GUImove!(move,board,vsBOT)
     make_move!(move,board)
     moves = generate_moves(board)
     if vsBOT && !check_win(board)
-        botmove = bot.best_move(board,moves,4,true)
+        botmove = bot.best_move(board,moves,UInt8(4),true)
         make_move!(botmove,board)
     end
 end

@@ -7,7 +7,7 @@ Minimax with alpha beta pruning tree search
 
 using logic
 using StaticArrays
-export best_move,evaluate,eval,side_index
+export best_move,evaluate,eval,side_index,MGweighting,EGweighting
 
 #define evaluation constants
 eval(::King) = Float32(0)
@@ -18,7 +18,10 @@ eval(::Bishop) = Float32(300)
 eval(::Knight) = Float32(300)
 const INF::Int32 = typemax(Int32) - 1000
 
-const DEPTH = 4 
+#maximum search depth
+const DEPTH::UInt8 = 4 
+#number of pieces left when endgame begins
+const EGBEGIN = 12
 
 function get_PST(type)
     data = Vector{Float32}()
@@ -29,19 +32,33 @@ function get_PST(type)
     return data
 end
 
-const PawnPST::SVector{64,Float32} = get_PST("pawn")
-const KnightPST::SVector{64,Float32} = get_PST("knight")
-const BishopPST::SVector{64,Float32} = get_PST("bishop")
-const RookPST::SVector{64,Float32} = get_PST("rook")
-const QueenPST::SVector{64,Float32} = get_PST("queen")
-const KingPST::SVector{64,Float32} = get_PST("queen")
+function PST(stage="")
+    PawnPST::SVector{64,Float32} = get_PST("pawn"*stage)
+    KnightPST::SVector{64,Float32} = get_PST("knight"*stage)
+    BishopPST::SVector{64,Float32} = get_PST("bishop"*stage)
+    RookPST::SVector{64,Float32} = get_PST("rook"*stage)
+    QueenPST::SVector{64,Float32} = get_PST("queen"*stage)
+    KingPST::SVector{64,Float32} = get_PST("king"*stage)
+    return SVector{6,SVector{64,Float32}}([KingPST,QueenPST,RookPST,BishopPST,KnightPST,PawnPST])
+end
 
-PST(::Pawn, index) = PawnPST[index+1]
-PST(::Knight, index) = KnightPST[index+1]
-PST(::Bishop, index) = BishopPST[index+1]
-PST(::Rook, index) = RookPST[index+1]
-PST(::Queen, index) = QueenPST[index+1]
-PST(::King, index) = KingPST[index+1]
+const PSTs = PST()
+const EGPSTs = PST("EG")
+
+"If more than EGBEGIN+2 pieces lost, set to 0. Between 0 and EGBEGIN+2 pieces lost, decrease linearly from 1 to 0"
+function MGweighting(pc_remaining)::Float32 
+    pc_lost = 24 - pc_remaining
+    grad = -1/(EGBEGIN+2)
+    weight = 1 + grad*pc_lost
+    return max(0,weight)
+end
+
+"If more than EGBEGIN+2 pieces remaining, set to 0. Between EGBEGIN+2 and 2 remaining increase linearly to 1"
+function EGweighting(pc_remaining)::Float32 
+    grad = -1/EGBEGIN
+    weight = 1 + grad*(pc_remaining-2)
+    return max(0,weight)
+end
 
 "Index into PST"
 side_index(::white, ind) = ind
@@ -70,16 +87,22 @@ get_player(B::Boardstate)::Int8 = ifelse(B.ColourIndex==0, 1, -1)
 "Returns score of current position from whites perspective. Value calculated as a Float then rounded to an Int"
 function evaluate(board::Boardstate)::Int32
     score = Float32(0)
+    num_pieces = count_pieces(board.pieces)
+    MG = MGweighting(num_pieces)
+    EG = EGweighting(num_pieces)
 
-    for type in piecetypes[1:end]
+    for (type,MG_PST,EG_PST) in zip(piecetypes,PSTs,EGPSTs)
         for (colour,sgn) in zip([white(),black()],[+1,-1])
             for pos in identify_locations(board.pieces[val(colour)+val(type)])
                 score += sgn*eval(type)
-                score += sgn*PST(type,side_index(colour,pos))
+
+                ind = side_index(colour,pos)
+                score += sgn*MG*MG_PST[ind+1]
+                score += sgn*EG*EG_PST[ind+1]
             end
         end
     end
-    return Int32(round(score))
+    return convert(Int32,round(score))
 end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
@@ -117,7 +140,7 @@ function minimax(board,player,α,β,depth,logger)
 end
 
 "root of minimax with alpha beta pruning"
-function alpha_beta(board::Boardstate,moves::Vector{Move},depth)
+function alpha_beta(board::Boardstate,moves::Vector{Move},depth::UInt8)
     best_move = NULLMOVE
     #whites current best score
     α = -INF 
@@ -141,7 +164,7 @@ function alpha_beta(board::Boardstate,moves::Vector{Move},depth)
 end
 
 "Evaluates the position to return the best move"
-function best_move(board::Boardstate,moves::Vector{Move},depth=DEPTH,logging=false)
+function best_move(board::Boardstate,moves::Vector{Move},depth::UInt8=DEPTH,logging=false)
     t = time()
     best_move,logger = alpha_beta(board,moves,depth)
     δt = time() - t

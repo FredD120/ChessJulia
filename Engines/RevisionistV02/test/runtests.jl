@@ -38,27 +38,39 @@ function test_positional()
 
     @assert ev2 > ev1 "Knights encouraged to be central"
 
-    FEN = "4k3/8/8/8/PP4PP/8/2PPPP2/4K3 w KQkq - 0 1"
+    FEN = "4k3/pppppppp/8/8/PP4PP/8/2PPPP2/4K3 w KQkq - 0 1"
     board = Boardstate(FEN)
     ev1 = evaluate(board)
 
-    FEN = "4k3/8/8/8/2PPPP2/8/PP4PP/4K3 w KQkq - 0 1"
+    FEN = "4k3/pppppppp/8/8/2PPPP2/8/PP4PP/4K3 w KQkq - 0 1"
     board = Boardstate(FEN)
     ev2 = evaluate(board)
 
     @assert ev2 > ev1 "Push central pawns first"
 
-    FEN = "4k3/8/8/8/8/8/8/R3K3 w Qkq - 0 1"
+    FEN = "4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K3 w Qkq - 0 1"
     board = Boardstate(FEN)
     ev1 = evaluate(board)
 
-    FEN = "4k3/8/8/8/8/8/8/2KR4 w KQkq - 0 1"
+    FEN = "4k3/pppppppp/8/8/8/8/PPPPPPPP/2KR4 w KQkq - 0 1"
     board = Boardstate(FEN)
     ev2 = evaluate(board)
 
     @assert ev2 > ev1 "Castling is positionally favourable"
 end
 test_positional()
+
+function test_weighting()
+    FEN = "4k3/ppppppp1/8/8/8/8/PPP5/R3K3 w Qkq - 0 1"
+    board = Boardstate(FEN)
+    num_pcs = count_pieces(board.pieces)
+
+    @assert MGweighting(num_pcs) > EGweighting(num_pcs) "At 13 pieces, weighted towards midgame"
+
+    num_pcs = 10
+    @assert MGweighting(num_pcs) < EGweighting(num_pcs) "At 10 pieces, weighted towards endgame"
+end
+test_weighting()
 
 function test_best()
     FEN = "K6Q/8/8/8/8/8/8/b6k b - - 0 1"

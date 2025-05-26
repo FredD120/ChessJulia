@@ -1,6 +1,6 @@
 name = "RevisionistV02"
 uuid = "3ba3440e-9551-40af-bd9f-ce36b41a2b46"
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

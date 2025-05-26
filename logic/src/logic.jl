@@ -20,7 +20,7 @@ export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft, Piece,
 King, Queen, Rook, Bishop, Knight, Pawn, White, Black, white, black, val, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
-PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations,
+PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file
 
 using InteractiveUtils
@@ -221,6 +221,15 @@ function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UIn
         end
     end
     return ID
+end
+
+"Count the total number of pieces in a vector of bitboards"
+function count_pieces(pieces::Vector{UInt64})
+    count = 0
+    for BB in pieces
+        count += count_ones(BB)
+    end
+    return count
 end
 
 "Helper function when constructing a boardstate"
