@@ -72,9 +72,10 @@ mutable struct Logger
     terminal::Int32
     branches_cut::Vector{Int32}
     evaltime::Float64
+    movegentime::Float64
 end
 
-Logger(depth) = Logger(0,0,0,zeros(depth),0)
+Logger(depth) = Logger(0,0,0,zeros(depth),0,0)
 
 "Constant evaluation of stalemate"
 eval(::Draw,depth) = Int32(0)
@@ -107,7 +108,9 @@ end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
 function minimax(board,player,α,β,depth,logger)
+    t = time()
     moves = generate_moves(board)
+    logger.movegentime += time() - t
     if board.State != Neutral()
         logger.terminal += 1
         t = time()
@@ -188,9 +191,10 @@ function best_move(board::Boardstate,moves::Vector{Move},depth::UInt8=DEPTH,logg
     return best_move
 end
 
-"Wrapper for passing board to best move"
+"Find best move silently but return logger"
 function best_move(position::Boardstate)
     moves = generate_moves(position)
-    return best_move(position,moves)
+    best_move,logger = alpha_beta(position,moves,DEPTH)
+    return best_move,logger
 end
 end #module

@@ -1,14 +1,17 @@
 module logic
 
 ###TO THINK ABOUT###
-#Are tuples better than vectors for data known at compile time?
 #How much data is being passed around by functions unnecessarily?
 #Is there code branching due to type instability?
-#Pawn code is noticeably slower (due to branching?)
 #Decide function once then repeatedly call it (functions have different types -> type instability)
 #Vs call function repeatedly and choose each time (for only two cheap functions is ok)
 #Can force definite types for function dispatch, will create union of types that are slow if too many
 #Might want to fold move struct into single 32 bit int and create helper functions to decode
+#Might want to generate attacks seperately for quiescence 
+#Try to reduce allocations/copying
+#Initialise movelist with size hint then generate_moves modifies in-place using push
+#Maybe unify type system and use multiple dispatch to be more julia-like
+#Include PSTs, updated in make/unmake by create! and destroy!
 #=
 To check generated code:
 @code_llvm
@@ -86,8 +89,8 @@ file(ind) = ind % 8
 
 struct Move
     piece_type::UInt8
-    from::UInt32
-    to::UInt32
+    from::UInt8
+    to::UInt8
     capture_type::UInt8
     flag::UInt8
 end
@@ -377,7 +380,7 @@ function get_Crights(castling,ColID,KorQside)
 end
 
 "Returns a single bitboard representing the positions of an array of pieces"
-function BBunion(piece_vec::VecOrMat{UInt64})
+function BBunion(piece_vec::Vector{UInt64})
     BB = UInt64(0)
     for piece in piece_vec
         BB |= piece
@@ -945,18 +948,14 @@ end
 
 "make a kingside castle"
 function Kcastle!(B::Boardstate,CpieceID)
-    kingpos = trailing_zeros(B.pieces[val(King())])
-    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos)
-    B.pieces[CpieceID] = B.pieces[CpieceID] << 2
-    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos+2)
+    kingpos = trailing_zeros(B.pieces[CpieceID])
+    move_piece!(B,CpieceID,kingpos,kingpos+2)
 end 
 
 "make a queenside castle"
 function Qcastle!(B::Boardstate,CpieceID)
-    kingpos = trailing_zeros(B.pieces[val(King())])
-    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos)
-    B.pieces[CpieceID] = B.pieces[CpieceID] >> 2
-    B.ZHash ⊻= ZKey_piece(CpieceID,kingpos-2)
+    kingpos = trailing_zeros(B.pieces[CpieceID])
+    move_piece!(B,CpieceID,kingpos,kingpos-2)
 end
 
 "update castling rights and Zhash"

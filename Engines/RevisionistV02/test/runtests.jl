@@ -1,6 +1,8 @@
 using RevisionistV02
 using logic
 
+const benchmark = true
+
 function test_index()
     pos = 17
     @assert rank(pos) == 5
@@ -120,4 +122,30 @@ function test_mate()
 end
 test_mate()
 
-println("All tests passed")
+function bench()
+    positions = readlines("$(dirname(@__DIR__))/test/test_positions.txt")
+
+    total_t = 0
+    eval_t = 0
+    movegen_t = 0
+    for p in positions
+        FEN = split(split(p,";")[1],"- bm")[1]*"0"
+        println("testing $FEN")
+        board = Boardstate(FEN)
+        t = time()
+        best,log = best_move(board)
+        total_t += time() - t
+        eval_t += log.evaltime
+        movegen_t += log.movegentime    
+    end
+
+    println("Took $total_t seconds. $eval_t s evaluating positions, $movegen_t s generating moves.")
+end
+
+if benchmark
+    bench()
+    println("All tests passed")
+else
+    println("All cheap tests passed")   
+end
+
