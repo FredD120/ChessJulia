@@ -687,7 +687,7 @@ if expensive
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
     #benchmarkspeed(leaves)
-    #best = 9.2e7 nps
+    #best = 2.1e7 nps
 end
 
 println("All tests passed")

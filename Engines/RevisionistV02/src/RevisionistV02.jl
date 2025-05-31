@@ -10,12 +10,6 @@ using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting
 
 #define evaluation constants
-eval(::King) = Float32(0)
-eval(::Pawn) = Float32(100)
-eval(::Queen) = Float32(900)
-eval(::Rook) = Float32(500)
-eval(::Bishop) = Float32(300)
-eval(::Knight) = Float32(300)
 const INF::Int32 = typemax(Int32) - 1000
 
 #maximum search depth
@@ -86,8 +80,6 @@ function evaluate(board::Boardstate)::Int32
     for (type,MG_PST,EG_PST) in zip(piecetypes,PSTs,EGPSTs)
         for colour in [White(),Black()]
             for pos in identify_locations(board.pieces[ColourPieceID(colour,type)])
-                score += sgn(colour)*eval(type)
-
                 ind = side_index(colour,pos)
                 score += sgn(colour)*MG*MG_PST[ind+1]
                 score += sgn(colour)*EG*EG_PST[ind+1]

@@ -57,7 +57,7 @@ function perft_suite(dep)
             println("Testing position: $FEN")
         end
         t = time()
-        cur_leaves = perft(board,depth,true)
+        cur_leaves = perft(board,depth)
         Δt += time() - t
         leaves += cur_leaves
 
@@ -76,8 +76,8 @@ end
 
 function main()
     #comparePerft()
-    #perft_suite(6)
-    single_perft("nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1",5)
+    perft_suite(6)
+    #single_perft("nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1",5)
 end
 main()
 

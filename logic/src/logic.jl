@@ -10,11 +10,11 @@ module logic
 ###FEATURES
 #Include PSTs, updated in make/unmake by create! and destroy!
 #Generate attacks seperately for quiescence 
+#Test for check/stale-mate
 
 ###OPTIMISATIONS
 
 ###REFACTOR
-#
 
 #=
 To check generated code:
@@ -1084,8 +1084,8 @@ function make_move!(move::UInt32,board::Boardstate)
             destroy_piece!(board,board.Colour,mv_pc_type,mv_from)
             create_piece!(board,board.Colour,promote_type(mv_flag),mv_to)
 
-            if mv_capture_type > 0
-                destroy_piece!(board,Opposite(board.Colour),mv_capture_type,mv_to)
+            if mv_cap_type > 0
+                destroy_piece!(board,Opposite(board.Colour),mv_cap_type,mv_to)
             end
 
         else #no flag, en-passant, double push
@@ -1167,7 +1167,7 @@ function unmake_move!(board::Boardstate)
                 create_piece!(board,OppCol,mv_pc_type,mv_from)
                 destroy_piece!(board,OppCol,promote_type(mv_flag),mv_to)
 
-                if mv_capture_type > 0
+                if mv_cap_type > 0
                     create_piece!(board,board.Colour,mv_cap_type,mv_to)
                 end
             end
