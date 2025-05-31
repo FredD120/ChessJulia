@@ -25,7 +25,7 @@ test_setters()
 
 function test_boardinit()
     board = Boardstate(FEN)
-    @assert Whitesmove(board.ColourIndex) == true
+    @assert Whitesmove(board.Colour) == true
     @assert board.Data.EnPassant[end] == UInt64(0)
     @assert logic.ally_pieces(board)[3] != UInt64(0)
     @assert logic.enemy_pieces(board)[3] != UInt64(0)
@@ -124,7 +124,7 @@ function test_legalinfo()
     simpleFEN = "K7/R7/8/8/8/8/8/r6q w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,White())
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
@@ -133,7 +133,7 @@ function test_legalinfo()
     simpleFEN = "K7/7R/8/8/8/8/8/qq6 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,White())
     @assert length(info.blocks) == 6 "6 squares blocking queen attack"
 
     simpleFEN = "4k3/8/8/8/4q3/8/4B3/1Q2K3 w - 0 1"
@@ -141,7 +141,7 @@ function test_legalinfo()
     all_pcs = logic.BBunion(board.pieces)
     kingBB = logic.ally_pieces(board)[val(King())]
     kingpos = LSB(kingBB)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,true)
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,White())
 
     @assert info.blocks == typemax(UInt64)
     @assert info.checks == typemax(UInt64)
@@ -303,7 +303,7 @@ function test_attckpcs()
     all_pcs = logic.BBunion(board.pieces)
     kingpos = LSB(board.pieces[val(King())])
 
-    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,true)
+    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,White())
     @assert checkers == (UInt64(1)<<8)|(UInt64(1)<<11)|(UInt64(1)<<23)|(UInt64(1)<<62) "2 sliding piece attacks, a knight and a pawn"
 end
 test_attckpcs()
@@ -312,7 +312,7 @@ function test_allposs()
     simpleFEN = "R1R1R1R1/8/8/8/8/8/8/1R1R1R1R b - - 0 1"
     board = Boardstate(simpleFEN) 
     all_pcs = logic.BBunion(board.pieces)  
-    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs,Whitesmove(board.ColourIndex))
+    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs,board.Colour)
 
     @assert attkBB == typemax(UInt64) "rooks are covering all squares"
 end
@@ -358,7 +358,7 @@ function test_makemove()
         end
     end
 
-    @assert Whitesmove(board.ColourIndex) == false
+    @assert Whitesmove(board.Colour) == false
     @assert board.Data.Halfmoves[end] == UInt8(1)
     @assert logic.enemy_pieces(board)[1] == UInt64(2)
 
@@ -380,7 +380,7 @@ function test_makemove()
     basicFEN = "1n6/K7/8/8/8/8/8/7k b - - 0 1"
     board = Boardstate(basicFEN)
     moves = generate_moves(board)
-    @assert Whitesmove(board.ColourIndex) == false
+    @assert Whitesmove(board.Colour) == false
     @assert length(moves) == 6
 
     for m in moves
@@ -403,7 +403,7 @@ function test_makemove()
             make_move!(m,board)
         end
     end
-    @assert Whitesmove(board.ColourIndex) == false
+    @assert Whitesmove(board.Colour) == false
     @assert sum(logic.ally_pieces(board)[2:end]) == 0
 
     GUI = GUIposition(board)
@@ -499,7 +499,7 @@ function test_unmake()
     end
     unmake_move!(board)
 
-    @assert Whitesmove(board.ColourIndex) == true
+    @assert Whitesmove(board.Colour) == true
     @assert logic.ally_pieces(board)[1] == UInt64(1)
     @assert logic.enemy_pieces(board)[5] == UInt64(2)
 
@@ -529,7 +529,7 @@ function test_unmake()
     unmake_move!(board)
     unmake_move!(board)
 
-    @assert Whitesmove(board.ColourIndex) == true
+    @assert Whitesmove(board.Colour) == true
     @assert logic.ally_pieces(board)[1] == UInt64(1)
     @assert logic.enemy_pieces(board)[5] == UInt64(2)
     @assert length(board.Data.Halfmoves) == 1

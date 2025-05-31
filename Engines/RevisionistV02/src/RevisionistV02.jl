@@ -60,12 +60,6 @@ function EGweighting(pc_remaining)::Float32
     return max(0,weight)
 end
 
-"Index into PST"
-side_index(::white, ind) = ind
-
-"Reverse rank order to access PSTs as black"
-side_index(::black, ind) = 8*rank(ind) + file(ind)
-
 mutable struct Logger
     best_score::Int32
     pos_eval::Int32
@@ -82,9 +76,6 @@ eval(::Draw,depth) = Int32(0)
 "Constant evaluation of being checkmated (favour quicker mates)"
 eval(::Loss,depth) = -INF - depth
 
-"used to negatively weight black positions in evaluation"
-get_player(B::Boardstate)::Int8 = ifelse(B.ColourIndex==0, 1, -1)
-
 "Returns score of current position from whites perspective. Value calculated as a Float then rounded to an Int"
 function evaluate(board::Boardstate)::Int32
     score = Float32(0)
@@ -93,13 +84,13 @@ function evaluate(board::Boardstate)::Int32
     EG = EGweighting(num_pieces)
 
     for (type,MG_PST,EG_PST) in zip(piecetypes,PSTs,EGPSTs)
-        for (colour,sgn) in zip([white(),black()],[+1,-1])
-            for pos in identify_locations(board.pieces[val(colour)+val(type)])
-                score += sgn*eval(type)
+        for colour in [White(),Black()]
+            for pos in identify_locations(board.pieces[ColourPieceID(colour,type)])
+                score += sgn(colour)*eval(type)
 
                 ind = side_index(colour,pos)
-                score += sgn*MG*MG_PST[ind+1]
-                score += sgn*EG*EG_PST[ind+1]
+                score += sgn(colour)*MG*MG_PST[ind+1]
+                score += sgn(colour)*EG*EG_PST[ind+1]
             end
         end
     end
@@ -149,7 +140,7 @@ function alpha_beta(board::Boardstate,moves::Vector{UInt32},depth::UInt8)
     α = -INF 
     #whites current worst score (blacks best score)
     β = INF
-    player = get_player(board)
+    player = sgn(board.Colour)
     logger = Logger(depth)
 
     for move in moves

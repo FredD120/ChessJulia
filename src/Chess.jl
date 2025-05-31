@@ -43,18 +43,18 @@ function load_pieces(renderer)
     filepath = "$(pwd())/ChessPieces/"
     texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
 
-    texture_vec[val(King())+White] = get_texture(renderer,filepath,"WhiteKing")
-    texture_vec[val(Queen())+White] = get_texture(renderer,filepath,"WhiteQueen")
-    texture_vec[val(Pawn())+White] = get_texture(renderer,filepath,"WhitePawn")
-    texture_vec[val(Bishop())+White] = get_texture(renderer,filepath,"WhiteBishop")
-    texture_vec[val(Knight())+White] = get_texture(renderer,filepath,"WhiteKnight")
-    texture_vec[val(Rook())+White] = get_texture(renderer,filepath,"WhiteRook")
-    texture_vec[val(King())+Black] = get_texture(renderer,filepath,"BlackKing")
-    texture_vec[val(Queen())+Black] = get_texture(renderer,filepath,"BlackQueen")
-    texture_vec[val(Pawn())+Black] = get_texture(renderer,filepath,"BlackPawn")
-    texture_vec[val(Bishop())+Black] = get_texture(renderer,filepath,"BlackBishop")
-    texture_vec[val(Knight())+Black] = get_texture(renderer,filepath,"BlackKnight")
-    texture_vec[val(Rook())+Black] = get_texture(renderer,filepath,"BlackRook")
+    texture_vec[ColourPieceID(White(),King())] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[ColourPieceID(White(),Queen())] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[ColourPieceID(White(),Pawn())] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[ColourPieceID(White(),Bishop())] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[ColourPieceID(White(),Knight())] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[ColourPieceID(White(),Rook())] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[ColourPieceID(Black(),King())] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[ColourPieceID(Black(),Queen())] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[ColourPieceID(Black(),Pawn())] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[ColourPieceID(Black(),Bishop())] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[ColourPieceID(Black(),Knight())] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[ColourPieceID(Black(),Rook())] = get_texture(renderer,filepath,"BlackRook")
 
     return texture_vec
 end
@@ -204,7 +204,7 @@ function check_win(logicstate::Boardstate)
     if logicstate.State != Neutral()
         if logicstate.State == Draw()
             println("Game over: Draw")
-        elseif Whitesmove(logicstate.ColourIndex)
+        elseif Whitesmove(logicstate.Colour)
             println("Game over: Black wins")
         else
             println("Game over: White wins")
@@ -278,7 +278,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,v
                             end
 
                             if promoting
-                                highlight_moves,position = promote_squares(mouse_pos,logic.ColID(logicstate.ColourIndex),position)
+                                highlight_moves,position = promote_squares(mouse_pos,logic.ColID(logicstate.Colour),position)
                             else
                                 #update positions of pieces in GUI representation
                                 position = GUIposition(logicstate)
@@ -339,7 +339,7 @@ function main()
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
     bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
-    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN,true)
+    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN)
 
 end
 main()
