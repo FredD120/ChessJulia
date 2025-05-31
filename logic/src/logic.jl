@@ -12,8 +12,9 @@ module logic
 #Generate attacks seperately for quiescence 
 
 ###OPTIMISATIONS
-#Fold move struct into single 32 bit int and create helper functions to decode
 
+###REFACTOR
+#Use White and Black types and derive values using multiple dispatch
 
 #=
 To check generated code:
@@ -27,7 +28,7 @@ Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft, Piece,
 King, Queen, Rook, Bishop, Knight, Pawn, White, Black, white, black, val, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
-NULLMOVE, rank, file
+NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB
 
 using InteractiveUtils
 using JLD2
@@ -71,11 +72,16 @@ Base.string(::Bishop) = "Bishop"
 Base.string(::Knight) = "Knight"
 Base.string(::Pawn) = "Pawn"
 
+"Get a rank from a 0-63 index"
+rank(ind) = 7 - (ind >> 3)
+"Get a file from a 0-63 index"
+file(ind) = ind % 8
+
 const ZobristKeys = rand(rng,UInt64,12*64+9)
 
 const NOFLAG = UInt8(0)
 const KCASTLE = UInt8(1)
-const QCASTLE = KCASTLE + 1
+const QCASTLE = UInt8(2)
 const EPFLAG = UInt8(3)
 const DPUSH = UInt8(4)
 const PROMQUEEN = UInt8(5)
@@ -85,24 +91,58 @@ const PROMKNIGHT = UInt8(8)
 
 struct Promote end
 
-"Get a rank from a 0-63 index"
-rank(ind) = 7 - (ind >> 3)
-"Get a file from a 0-63 index"
-file(ind) = ind % 8
+#=
+Move is defined by the piece moving - piece_type (3 bits)
+Where it is moving from - from (6 bits)
+Where it is moving to - to (6 bits)
+What (if any) piece it is capturing - capture_type (3 bits)
+Any flag for pawns/castling - flag (4 bits)
+This can be packed into a UInt32
+=#
 
-struct Move
-    piece_type::UInt8
-    from::UInt8
-    to::UInt8
-    capture_type::UInt8
-    flag::UInt8
+const PIECEMASK = 0x7
+const LOCMASK   = 0x3F
+const FLAGMASK = 0xF
+
+const TYPESIZE = 3
+const FROMSIZE = 6
+const TOSIZE   = 6
+const CAPSIZE  = 3
+
+const FROMSHIFT = TYPESIZE
+const TOSHIFT   = TYPESIZE + FROMSIZE
+const CAPSHIFT  = TYPESIZE + FROMSIZE + TOSIZE
+const FLAGSHIFT = TYPESIZE + FROMSIZE + TOSIZE + CAPSIZE
+
+"Mask and shift UInt32 to unpack move data"
+pc_type(move::UInt32) = UInt8(move & PIECEMASK)
+from(move::UInt32) = UInt8((move >> FROMSHIFT) & LOCMASK)
+to(move::UInt32) = UInt8((move >> TOSHIFT) & LOCMASK)
+cap_type(move::UInt32) = UInt8((move >> CAPSHIFT) & PIECEMASK)
+flag(move::UInt32) = UInt8((move >> FLAGSHIFT) & FLAGMASK)
+
+function unpack_move(move::UInt32)
+    mv_pc_type = pc_type(move)
+    mv_from = from(move)
+    mv_to = to(move)
+    mv_cap_type = cap_type(move)
+    mv_flag = flag(move)
+    (mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag)
 end
 
-const NULLMOVE = Move(0,0,0,0,0)
+function Move(pc_type::UInt8,from::UInt8,to::UInt8,cap_type::UInt8,flag::UInt8)::UInt32
+    UInt32(pc_type) |
+    (UInt32(from) << FROMSHIFT) |
+    (UInt32(to) << TOSHIFT) |
+    (UInt32(cap_type) << CAPSHIFT) | 
+    (UInt32(flag) << FLAGSHIFT)
+end
 
-Base.show(io::IO,m::Move) = print(io,"From=$(Int(m.from));To=$(Int(m.to));PieceId=$(Int(m.piece_type));Capture ID=$(Int(m.capture_type));Flag=$(Int(m.flag))")
+const NULLMOVE = Move(UInt8(0),UInt8(0),UInt8(0),UInt8(0),UInt8(0))
 
-"take in all possible moves for a given piece from a txt file"
+Base.show(io::IO,m::UInt32) = println(io,"From=$(Int(from(m))); To=$(Int(to(m))); PieceId=$(Int(pc_type(m))); Capture ID=$(Int(cap_type(m))); Flag=$(Int(flag(m)))")
+
+"take in all possible moves as a bitboard for a given piece from a txt file"
 function read_txt(filename)
     data = Vector{UInt64}()
     data_str = readlines("$(dirname(@__DIR__))/move_BBs/$(filename).txt")
@@ -193,14 +233,17 @@ mutable struct Boardstate
     EnPass::UInt64
     State::GameState
     ZHash::UInt64
-    MoveHist::Vector{Move}
+    MoveHist::Vector{UInt32}
     Data::BoardData
 end
+
+"Least significant bit of a bitboard, returned as a UInt8"
+LSB(BB::Integer) = UInt8(trailing_zeros(BB))
 
 "Helper function to determine whose move it is"
 Whitesmove(ColourIndex::UInt8) = ifelse(ColourIndex == 0, true, false)
 
-ColID(ColourIndex::UInt8) = ColourIndex % 5
+ColID(ColourIndex::UInt8)::UInt8 = ColourIndex % 5
 
 "Helper function to return opposite colour index"
 Opposite(ColourIndex::UInt8)::UInt8 = (ColourIndex+6)%12
@@ -210,7 +253,7 @@ function identify_locations(pieceBB::Integer)::Vector{UInt8}
     locations = Vector{UInt8}()
     temp_BB = pieceBB
     while temp_BB != 0
-        loc = trailing_zeros(temp_BB) #find 0-indexed location of least significant bit in BB
+        loc = LSB(temp_BB) #find 0-indexed location of least significant bit in BB
         push!(locations,loc)
         temp_BB &= temp_BB - 1        #trick to remove least significant bit
     end
@@ -223,7 +266,7 @@ function Base.iterate(BB::UInt64)
         return nothing
     else
         next_state = BB & (BB-1)
-        first_item = trailing_zeros(BB)
+        first_item = LSB(BB)
         return first_item,next_state
     end
 end
@@ -234,7 +277,7 @@ function Base.iterate(BB::UInt64,state::UInt64)
         return nothing
     else
         next_state = state & (state-1)
-        next_item = trailing_zeros(state)
+        next_item = LSB(state)
         return next_item,next_state
     end
 end
@@ -258,7 +301,7 @@ end
 function count_pieces(pieces::Vector{UInt64})
     count = 0
     for BB in pieces
-        count += count_ones(BB)
+        count += length(BB)
     end
     return count
 end
@@ -316,7 +359,7 @@ function Boardstate(FEN)
     EnPassant = UInt64(0)
     Halfmoves = UInt8(0)
     ColourIndex = UInt8(0)
-    MoveHistory = Vector{Move}()
+    MoveHistory = Vector{UInt32}()
     rank = nothing
     file = nothing
     FENdict = Dict('K'=>val(King()),'Q'=>val(Queen()),'R'=>val(Rook()),'B'=>val(Bishop()),'N'=>val(Knight()),'P'=>val(Pawn()))
@@ -393,10 +436,10 @@ function UCIpos(pos)
 end
 
 "convert a move to UCI notation"
-function UCImove(move::Move)
-    from = UCIpos(move.from)
-    to = UCIpos(move.to)
-    return from*to
+function UCImove(move::UInt32)
+    F = UCIpos(from(move))
+    T = UCIpos(to(move))
+    return F*T
 end
 
 "Masked 4-bit integer representing king- and queen-side castling rights for one side"
@@ -565,7 +608,7 @@ function create_castle(KorQ,WorB)
     #KorQ is 0 if kingside, 1 if queenside 
     #WorB is 0 if white, 1 if black
     from = UInt8(63 - 7*KorQ - WorB*56)
-    to = from - 2 + 5*KorQ
+    to = UInt8(from - 2 + 5*KorQ)
     return Move(val(King()),from,to,NULL_PIECE,KCASTLE+KorQ)
 end
 
@@ -728,7 +771,7 @@ function get_moves!(piece::King,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pc
             #white queen blockers are at index 5, black queen blockers are at index 6
             castleblock = moveset.CastleCheck[castleID+blockId*(2+(castleID%3))+1]
             if (castleblock & all_pcs == 0) & (castleattack & info.attack_sqs == 0)
-                push!(moves,create_castle(castleID%2,colID))
+                push!(moves,create_castle(UInt8(castleID%2),colID))
             end
         end
     end
@@ -768,14 +811,14 @@ end
 "Create list of pawn push moves with a given flag"
 function push_moves!(moves,singlepush,promotemask,shift,blocks,flag)
     for q1 in (singlepush & blocks & promotemask)
-        append_moves!(moves,val(Pawn()),q1+shift,q1,NULL_PIECE,flag)
+        append_moves!(moves,val(Pawn()),UInt8(q1+shift),q1,NULL_PIECE,flag)
     end
 end
 
 "Create list of double pawn push moves"
 function push_moves!(moves,doublepush,shift,blocks)
     for q2 in (doublepush & blocks)
-        push!(moves,Move(val(Pawn()),q2+2*shift,q2,NULL_PIECE,DPUSH))
+        push!(moves,Move(val(Pawn()),UInt8(q2+2*shift),q2,NULL_PIECE,DPUSH))
     end
 end
 
@@ -783,11 +826,11 @@ end
 function capture_moves!(moves,leftattack,rightattack,promotemask,shift,enemy_pcs,checks,enemy_vec::Vector{UInt64},flag)
     for la in (leftattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,la)
-        append_moves!(moves,val(Pawn()),la+shift+1,la,attack_pcID,flag)
+        append_moves!(moves,val(Pawn()),UInt8(la+shift+1),la,attack_pcID,flag)
     end
     for ra in (rightattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,ra)
-        append_moves!(moves,val(Pawn()),ra+shift-1,ra,attack_pcID,flag)
+        append_moves!(moves,val(Pawn()),UInt8(ra+shift-1),ra,attack_pcID,flag)
     end
 end
 
@@ -818,10 +861,10 @@ end
 "Create list of pawn en-passant moves"
 function EP_moves!(movelist,leftattack,rightattack,shift,EP_sqs,checks,all_pcs,enemy_vec,kingpos)
     for la in (leftattack & EP_sqs)  
-        push_EP!(movelist,la+shift+1,la,shift,checks,all_pcs,enemy_vec,kingpos)
+        push_EP!(movelist,UInt8(la+shift+1),la,shift,checks,all_pcs,enemy_vec,kingpos)
     end
     for ra in (rightattack & EP_sqs)
-        push_EP!(movelist,ra+shift-1,ra,shift,checks,all_pcs,enemy_vec,kingpos)
+        push_EP!(movelist,UInt8(ra+shift-1),ra,shift,checks,all_pcs,enemy_vec,kingpos)
     end
 end
 
@@ -866,8 +909,8 @@ function get_moves!(::Pawn,movelist,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,
 end
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
-function generate_moves(board::Boardstate)::Vector{Move}
-    movelist = Vector{Move}()
+function generate_moves(board::Boardstate)::Vector{UInt32}
+    movelist = Vector{UInt32}()
     sizehint!(movelist,40)
 
     #implement 50 move rule and 3 position repetition
@@ -883,7 +926,7 @@ function generate_moves(board::Boardstate)::Vector{Move}
     kingBB = ally[val(King())]
     isWhite = Whitesmove(board.ColourIndex)
     
-    kingpos = trailing_zeros(kingBB)
+    kingpos = LSB(kingBB)
     rookpins,bishoppins = detect_pins(kingpos,enemy,all_pcsBB,ally_pcsBB)
     legal_info = attack_info(enemy,all_pcsBB,kingpos,kingBB,isWhite)
 
@@ -938,13 +981,13 @@ end
 
 "make a kingside castle"
 function Kcastle!(B::Boardstate,CpieceID)
-    kingpos = trailing_zeros(B.pieces[CpieceID])
+    kingpos = LSB(B.pieces[CpieceID])
     move_piece!(B,CpieceID,kingpos,kingpos+2)
 end 
 
 "make a queenside castle"
 function Qcastle!(B::Boardstate,CpieceID)
-    kingpos = trailing_zeros(B.pieces[CpieceID])
+    kingpos = LSB(B.pieces[CpieceID])
     move_piece!(B,CpieceID,kingpos,kingpos-2)
 end
 
@@ -974,17 +1017,19 @@ end
 EPlocation(moveloc,ColId) = ifelse(ColId==0,moveloc+8,moveloc-8)
 
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist. update castling rights"
-function make_move!(move::Move,board::Boardstate)
+function make_move!(move::UInt32,board::Boardstate)
+    mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag = unpack_move(move::UInt32)
+
     #0 = white, 1 = black
     ColId = ColID(board.ColourIndex)
 
     #deal with castling
-    if (move.flag == KCASTLE) | (move.flag == QCASTLE)
+    if (mv_flag == KCASTLE) | (mv_flag == QCASTLE)
         rookID = board.ColourIndex + val(Rook())
-        move_piece!(board,rookID,move.from,move.to)
+        move_piece!(board,rookID,mv_from,mv_to)
         updateCrights!(board,ColId,0)
         CpieceID = board.ColourIndex + val(King())
-        if move.flag == KCASTLE
+        if mv_flag == KCASTLE
             Kcastle!(board,CpieceID)
         else
             Qcastle!(board,CpieceID)
@@ -995,44 +1040,44 @@ function make_move!(move::Move,board::Boardstate)
     #update castling rights if not castling    
     else
         if board.Castle > 0
-            if move.piece_type == val(King())
+            if mv_pc_type == val(King())
                 updateCrights!(board,ColId,0)
             else
                 #lose self castle rights
-                if move.from == 63-56*ColId     #kingside
+                if mv_from == 63-56*ColId     #kingside
                     updateCrights!(board,ColId,1)
-                elseif move.from == 56-56*ColId #queenside
+                elseif mv_from == 56-56*ColId #queenside
                     updateCrights!(board,ColId,2)
                 end
             end
             #remove enemy castle rights
-            if move.to == 7+56*ColId        #kingside
+            if mv_to == 7+56*ColId        #kingside
                 updateCrights!(board,(ColId+1)%2,1)
-            elseif move.to == 56*ColId      #queenside
+            elseif mv_to == 56*ColId      #queenside
                 updateCrights!(board,(ColId+1)%2,2)
             end
         end
         #deal with promotions, always reset halfmove clock
-        if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
+        if (mv_flag == PROMQUEEN)|(mv_flag == PROMROOK)|(mv_flag == PROMBISHOP)|(mv_flag == PROMKNIGHT)
             push!(board.Data.Halfmoves,0)
-            destroy_piece!(board,board.ColourIndex+move.piece_type,move.from)
-            create_piece!(board,board.ColourIndex+promote_type(move.flag),move.to)
+            destroy_piece!(board,board.ColourIndex+mv_pc_type,mv_from)
+            create_piece!(board,board.ColourIndex+promote_type(mv_flag),mv_to)
 
-            if move.capture_type > 0
-                destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,move.to)
+            if mv_capture_type > 0
+                destroy_piece!(board,Opposite(board.ColourIndex)+mv_capture_type,mv_to)
             end
 
         else #no flag, en-passant, double push
-            move_piece!(board,board.ColourIndex+move.piece_type,move.from,move.to)
+            move_piece!(board,board.ColourIndex+mv_pc_type,mv_from,mv_to)
 
-            if move.capture_type > 0
-                destroy_loc = move.to
-                if move.flag == EPFLAG
+            if mv_cap_type > 0
+                destroy_loc = mv_to
+                if mv_flag == EPFLAG
                     destroy_loc = EPlocation(destroy_loc,ColId)
                 end
-                destroy_piece!(board,Opposite(board.ColourIndex)+move.capture_type,destroy_loc)
+                destroy_piece!(board,Opposite(board.ColourIndex)+mv_cap_type,destroy_loc)
                 push!(board.Data.Halfmoves,0)
-            elseif move.piece_type == val(Pawn())
+            elseif mv_pc_type == val(Pawn())
                 push!(board.Data.Halfmoves,0)
             else
                 board.Data.Halfmoves[end] += 1
@@ -1041,8 +1086,8 @@ function make_move!(move::Move,board::Boardstate)
     end
 
     #update EnPassant
-    if move.flag == DPUSH
-        location = EPlocation(move.to,ColId)
+    if mv_flag == DPUSH
+        location = EPlocation(mv_to,ColId)
         board.EnPass = UInt64(1) << location
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
@@ -1074,13 +1119,14 @@ function unmake_move!(board::Boardstate)
     if length(board.MoveHist) > 0
         board.State = Neutral()
         move = board.MoveHist[end]
+        mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag = unpack_move(move::UInt32)
 
-        if (move.flag == KCASTLE)|(move.flag == QCASTLE)
+        if (mv_flag == KCASTLE)|(mv_flag == QCASTLE)
             rookID = OppCol + val(Rook())
-            move_piece!(board,rookID,move.to,move.from)
+            move_piece!(board,rookID,mv_to,mv_from)
             CpieceID = OppCol + val(King())
             #unmaking a kingside castle is the same as a queenside castle and vice-versa
-            if move.flag == KCASTLE
+            if mv_flag == KCASTLE
                 Qcastle!(board,CpieceID)
             else
                 Kcastle!(board,CpieceID)
@@ -1088,22 +1134,22 @@ function unmake_move!(board::Boardstate)
         
         #deal with everything other than castling
         else
-            if (move.flag==NOFLAG)|(move.flag==DPUSH)|(move.flag==EPFLAG)
-                move_piece!(board,OppCol+move.piece_type,move.to,move.from)
+            if (mv_flag==NOFLAG)|(mv_flag==DPUSH)|(mv_flag==EPFLAG)
+                move_piece!(board,OppCol+mv_pc_type,mv_to,mv_from)
 
-                if move.capture_type > 0
-                    create_loc = move.to
-                    if move.flag == EPFLAG
+                if mv_cap_type > 0
+                    create_loc = mv_to
+                    if mv_flag == EPFLAG
                         create_loc = EPlocation(create_loc,ColID(OppCol))
                     end
-                    create_piece!(board,board.ColourIndex+move.capture_type,create_loc)
+                    create_piece!(board,board.ColourIndex+mv_cap_type,create_loc)
                 end
             else #deal with promotions
-                create_piece!(board,OppCol+move.piece_type,move.from)
-                destroy_piece!(board,OppCol+promote_type(move.flag),move.to)
+                create_piece!(board,OppCol+mv_pc_type,mv_from)
+                destroy_piece!(board,OppCol+promote_type(mv_flag),mv_to)
 
-                if move.capture_type > 0
-                    create_piece!(board,board.ColourIndex+move.capture_type,move.to)
+                if mv_capture_type > 0
+                    create_piece!(board,board.ColourIndex+mv_cap_type,mv_to)
                 end
             end
         end

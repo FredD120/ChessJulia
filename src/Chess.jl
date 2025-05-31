@@ -142,16 +142,16 @@ end
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
     highlight = []
     for move in legal_moves
-        if (move.flag == KCASTLE) | (move.flag == QCASTLE)
+        if (flag(move) == KCASTLE) | (flag(move) == QCASTLE)
             if kingpos == mouse_pos
-                if move.flag == KCASTLE
+                if flag(move) == KCASTLE
                     push!(highlight,kingpos+2)
                 else
                     push!(highlight,kingpos-2)
                 end
             end
-        elseif move.from == mouse_pos
-            push!(highlight,move.to)
+        elseif from(move) == mouse_pos
+            push!(highlight,to(move))
         end
     end
     return highlight
@@ -160,7 +160,7 @@ end
 function promote_move!(logicstate,index,legal_moves,BOT)
     promotype = [PROMQUEEN,PROMROOK,PROMBISHOP,PROMKNIGHT]
 
-    moveID = findfirst(i->i.flag==promotype[index],legal_moves)
+    moveID = findfirst(i->flag(i)==promotype[index],legal_moves)
     GUImove!(legal_moves[moveID],logicstate,BOT)
 end
 
@@ -179,8 +179,8 @@ end
 "update logic with move made and return true if trying to promote"
 function move_clicked!(logicstate,move_from,mouse_pos,kingpos,legal_moves,BOT)
     for move in legal_moves
-        if (move.to == mouse_pos) & (move.from == move_from)
-            if (move.flag == PROMQUEEN)|(move.flag == PROMROOK)|(move.flag == PROMBISHOP)|(move.flag == PROMKNIGHT)
+        if (to(move) == mouse_pos) & (from(move) == move_from)
+            if (flag(move) == PROMQUEEN)|(flag(move) == PROMROOK)|(flag(move) == PROMBISHOP)|(flag(move) == PROMKNIGHT)
                 return true
             else
                 GUImove!(move,logicstate,BOT)
@@ -188,10 +188,10 @@ function move_clicked!(logicstate,move_from,mouse_pos,kingpos,legal_moves,BOT)
             end
         #check for castling moves
         elseif move_from == kingpos
-            if (mouse_pos == move_from + 2) & (move.flag == KCASTLE)
+            if (mouse_pos == move_from + 2) & (flag(move) == KCASTLE)
                 GUImove!(move,logicstate,BOT)
                 return false
-            elseif (mouse_pos == move_from - 2) & (move.flag == QCASTLE)
+            elseif (mouse_pos == move_from - 2) & (flag(move) == QCASTLE)
                 GUImove!(move,logicstate,BOT)
                 return false
             end

@@ -2,8 +2,8 @@ using RevisionistV02
 using logic
 using Profile
 
-const benchmark = false
-const profil = true
+const benchmark = true
+const profil = false
 
 function test_index()
     pos = 17
@@ -81,7 +81,7 @@ function test_best()
     board = Boardstate(FEN)
     moves = generate_moves(board)
     best = best_move(board,moves)
-    ind = findfirst(i->i.capture_type==val(Queen()),moves)
+    ind = findfirst(i->cap_type(i)==val(Queen()),moves)
 
     @assert best == moves[ind] "Bishop should capture queen as black"
 
@@ -89,7 +89,7 @@ function test_best()
     board = Boardstate(FEN)
     moves = generate_moves(board)
     best = best_move(board,moves)
-    ind = findfirst(i->i.capture_type==val(Queen()),moves)
+    ind = findfirst(i->cap_type(i)==val(Queen()),moves)
 
     @assert best == moves[ind] "Bishop should capture queen as white"
 
@@ -97,7 +97,7 @@ function test_best()
     board = Boardstate(FEN)
     moves = generate_moves(board)
     best = best_move(board,moves)
-    ind = findfirst(i->i.to==62,moves)
+    ind = findfirst(i->to(i)==62,moves)
 
     @assert best != moves[ind] "Queen should not allow itself to be captured"
 end
@@ -166,9 +166,9 @@ if benchmark
     println("All tests passed")
 
     #best for 1st 15 positions:
-    #43 seconds total
-    #24.2 seconds evaluation
-    #18.3 seconds move gen
+    #33.4 seconds total
+    #23.8 seconds evaluation
+    #9.0 seconds move gen
 else
     println("All cheap tests passed") 
 end

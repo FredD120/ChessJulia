@@ -143,7 +143,7 @@ function minimax(board,player,α,β,depth,logger)
 end
 
 "root of minimax with alpha beta pruning"
-function alpha_beta(board::Boardstate,moves::Vector{Move},depth::UInt8)
+function alpha_beta(board::Boardstate,moves::Vector{UInt32},depth::UInt8)
     best_move = NULLMOVE
     #whites current best score
     α = -INF 
@@ -167,7 +167,7 @@ function alpha_beta(board::Boardstate,moves::Vector{Move},depth::UInt8)
 end
 
 "Evaluates the position to return the best move"
-function best_move(board::Boardstate,moves::Vector{Move},depth::UInt8=DEPTH,logging=false)
+function best_move(board::Boardstate,moves::Vector{UInt32},depth::UInt8=DEPTH,logging=false)
     t = time()
     best_move,logger = alpha_beta(board,moves,depth)
     δt = time() - t

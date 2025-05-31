@@ -11,7 +11,7 @@ rng = Xoshiro(2000)
 export best_move
 
 "Evaluates the position to return the best move"
-function best_move(board::Boardstate,moves::Vector{Move})
+function best_move(board::Boardstate,moves::Vector{UInt32})
     return rand(rng,moves)
 end
 

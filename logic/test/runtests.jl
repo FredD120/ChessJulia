@@ -62,6 +62,23 @@ function test_BitboardUnion()
 end
 test_BitboardUnion()
 
+function test_Move()
+    pc = UInt8(1)
+    from = UInt8(10)
+    to = UInt8(11)
+    cap = UInt8(3)
+    flag = UInt8(1)
+    mv = Move(pc,from,to,cap,flag)
+
+    P,F,T,C,Fl = logic.unpack_move(mv)
+    @assert P == pc
+    @assert F == from
+    @assert T == to
+    @assert C == cap
+    @assert Fl == flag
+end
+test_Move()
+
 function test_moveBB()
     movestruct = logic.Move_BB()
     @assert length(movestruct.knight) == 64
@@ -94,12 +111,12 @@ test_identifylocs()
 function test_movfromloc()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    moves = Vector{Move}()
-    logic.moves_from_location!(logic.val(King()),moves,logic.enemy_pieces(board),UInt64(3),2,false)
+    moves = Vector{UInt32}()
+    logic.moves_from_location!(logic.val(King()),moves,logic.enemy_pieces(board),UInt64(3),UInt8(2),false)
     @assert length(moves) == 2
-    @assert moves[1].capture_type == 0
-    @assert moves[2].from == 2
-    @assert moves[1].piece_type == 1
+    @assert cap_type(moves[1]) == 0
+    @assert from(moves[2]) == 2
+    @assert pc_type(moves[1]) == 1
 end
 test_movfromloc()
 
@@ -123,7 +140,7 @@ function test_legalinfo()
     board = Boardstate(simpleFEN)  
     all_pcs = logic.BBunion(board.pieces)
     kingBB = logic.ally_pieces(board)[val(King())]
-    kingpos = trailing_zeros(kingBB)
+    kingpos = LSB(kingBB)
     info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,true)
 
     @assert info.blocks == typemax(UInt64)
@@ -149,7 +166,7 @@ function testpins()
     ally_pcs = logic.BBunion(logic.ally_pieces(board))
     enemy = logic.enemy_pieces(board)
     kingBB = logic.ally_pieces(board)[val(King())]
-    kingpos = trailing_zeros(kingBB)
+    kingpos = LSB(kingBB)
 
     rookpins,bishoppins = logic.detect_pins(kingpos,enemy,all_pcs,ally_pcs)
     @assert rookpins == 0
@@ -165,11 +182,11 @@ function test_castle()
     Kcount = 0
     Qcount = 0
     for m in moves 
-        if m.flag == KCASTLE
+        if flag(m) == KCASTLE
             Kcount +=1
-        elseif m.flag == QCASTLE
+        elseif flag(m) == QCASTLE
             Qcount +=1
-        elseif (m.from == 63) & (m.capture_type == val(Rook()))
+        elseif (from(m) == 63) & (cap_type(m) == val(Rook()))
             make_move!(m,board)
         end
     end
@@ -181,11 +198,11 @@ function test_castle()
     Kcount = 0
     Qcount = 0
     for m in bmoves 
-        if m.flag == KCASTLE
+        if flag(m) == KCASTLE
             Kcount +=1
-        elseif m.flag == QCASTLE
+        elseif flag(m) == QCASTLE
             Qcount +=1
-        elseif m.to == 12
+        elseif to(m) == 12
             make_move!(m,board)
         end
     end
@@ -195,9 +212,9 @@ function test_castle()
     Kcount = 0
     Qcount = 0
     for m in moves 
-        if m.flag == KCASTLE
+        if flag(m) == KCASTLE
             Kcount +=1
-        elseif m.flag == QCASTLE
+        elseif flag(m) == QCASTLE
             Qcount +=1
         end
     end
@@ -208,7 +225,7 @@ function test_castle()
     cFEN = "r3k2r/8/8/8/8/8/8/RB2K2R w KQkq - 0 1"
     board = Boardstate(cFEN)
     moves = generate_moves(board)
-    @assert all(i -> (i.flag != QCASTLE), moves) "cannot castle queenside when piece in the way"
+    @assert all(i -> (flag(i) != QCASTLE), moves) "cannot castle queenside when piece in the way"
 end
 test_castle()
 
@@ -217,23 +234,23 @@ function test_pawns()
     board = Boardstate(pFEN)
     moves = generate_moves(board)
 
-    @assert count(i->(i.piece_type==val(Pawn())),moves) == 3 "Pinned/blocked by bishop"
-    @assert count(i->(i.capture_type==val(Bishop())),moves) == 1 "Capture bishop along pin"
+    @assert count(i->(pc_type(i)==val(Pawn())),moves) == 3 "Pinned/blocked by bishop"
+    @assert count(i->(cap_type(i)==val(Bishop())),moves) == 1 "Capture bishop along pin"
 
     promFEN = "K3r4/1r2P3/8/8/8/8/8/8 w - - 0 1"
     board = Boardstate(promFEN)
     moves = generate_moves(board)
-    @assert length(findall(i->i.flag==PROMQUEEN,moves)) == 1 "One of each promote type Q"
-    @assert length(findall(i->i.flag==PROMROOK,moves)) == 1 "One of each promote type R"
-    @assert length(findall(i->i.flag==PROMBISHOP,moves)) == 1 "One of each promote type B"
-    @assert length(findall(i->i.flag==PROMKNIGHT,moves)) == 1 "One of each promote type N"
-    @assert length(findall(i->i.capture_type==val(Rook()),moves)) == 4 "Must capture rook" 
+    @assert length(findall(i->flag(i)==PROMQUEEN,moves)) == 1 "One of each promote type Q"
+    @assert length(findall(i->flag(i)==PROMROOK,moves)) == 1 "One of each promote type R"
+    @assert length(findall(i->flag(i)==PROMBISHOP,moves)) == 1 "One of each promote type B"
+    @assert length(findall(i->flag(i)==PROMKNIGHT,moves)) == 1 "One of each promote type N"
+    @assert length(findall(i->cap_type(i)==val(Rook()),moves)) == 4 "Must capture rook" 
 
     checkFEN = "8/8/R7/pppppppk/5R1R/8/8/7K b - - 1 1"
     board = Boardstate(checkFEN)
     moves = generate_moves(board)
     @assert length(moves) == 1
-    @assert moves[1].piece_type == val(Pawn()) "only pawn can capture"
+    @assert pc_type(moves[1]) == val(Pawn()) "only pawn can capture"
 end
 test_pawns()
 
@@ -243,7 +260,7 @@ function testEP()
     moves = generate_moves(board)
 
     @assert length(moves) == 1 "Only one legal move, pawn double push"
-    @assert moves[1].flag == DPUSH
+    @assert flag(moves[1]) == DPUSH
 
     make_move!(moves[1],board)
     @assert board.EnPass == UInt64(1) << 19 "En-passant square created by double push"
@@ -251,8 +268,8 @@ function testEP()
     EPfen = "8/8/7k/8/Pp6/8/8/K b - a3 0 1"
     board = Boardstate(EPfen)
     moves = generate_moves(board)
-    @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can en-passant"
-    kingmv = findfirst(i->i.piece_type==val(King()),moves)
+    @assert length(findall(i->flag(i)==EPFLAG,moves)) == 1 "Can en-passant"
+    kingmv = findfirst(i->pc_type(i)==val(King()),moves)
     make_move!(moves[kingmv],board)
     @assert board.EnPass == 0 "Should clear EP bitboard"
 
@@ -260,23 +277,23 @@ function testEP()
     board = Boardstate(newFEN)
     moves = generate_moves(board)
     @assert length(moves) == 6
-    @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can EP capture out of check"
+    @assert length(findall(i->flag(i)==EPFLAG,moves)) == 1 "Can EP capture out of check"
 
     newFEN = "K7/8/8/2pP4/8/8/8/7b w - c6 1 1"
     board = Boardstate(newFEN)
     moves = generate_moves(board)
     @assert length(moves) == 4
-    @assert length(findall(i->i.flag==EPFLAG,moves)) == 1 "Can EP along bishop pin"
+    @assert length(findall(i->flag(i)==EPFLAG,moves)) == 1 "Can EP along bishop pin"
 
     newFEN = "k6R/8/8/8/ppppppP1/8/8/7K b - g3 1 1"
     board = Boardstate(newFEN)
     moves = generate_moves(board)
-    @assert length(findall(i->i.piece_type==val(Pawn()),moves)) == 0 "Can't EP when in check"
+    @assert length(findall(i->pc_type(i)==val(Pawn()),moves)) == 0 "Can't EP when in check"
 
     newFEN = "8/8/8/K1pPr/8/8/8/8 w - c6 1 1"
     board = Boardstate(newFEN)
     moves = generate_moves(board)
-    @assert length(findall(i->i.flag==EPFLAG,moves)) == 0 "Can't EP as pinned by rook"
+    @assert length(findall(i->flag(i)==EPFLAG,moves)) == 0 "Can't EP as pinned by rook"
 end
 testEP()
 
@@ -284,7 +301,7 @@ function test_attckpcs()
     simpleFEN = "8/p2n4/1K5r/8/8/8/8/6b1 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    kingpos = trailing_zeros(board.pieces[val(King())])
+    kingpos = LSB(board.pieces[val(King())])
 
     checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,true)
     @assert checkers == (UInt64(1)<<8)|(UInt64(1)<<11)|(UInt64(1)<<23)|(UInt64(1)<<62) "2 sliding piece attacks, a knight and a pawn"
@@ -309,7 +326,7 @@ function test_movegetters()
     attks = 0
     quiets = 0
     for m in moves 
-        if m.capture_type > 0 
+        if cap_type(m) > 0 
             attks+=1
         else 
             quiets+=1
@@ -336,7 +353,7 @@ function test_makemove()
     @assert logic.ally_pieces(board)[1] == UInt64(1)
 
     for m in moves
-        if m.to == 1
+        if to(m) == 1
             make_move!(m,board)
         end
     end
@@ -351,7 +368,7 @@ function test_makemove()
     moves = generate_moves(board)
 
     for m in moves
-        if m.to == 8
+        if to(m) == 8
             make_move!(m,board)
         end
     end
@@ -367,7 +384,7 @@ function test_makemove()
     @assert length(moves) == 6
 
     for m in moves
-        if m.to == 11
+        if to(m) == 11
             make_move!(m,board)
         end
     end
@@ -382,7 +399,7 @@ function test_makemove()
     @assert length(moves) == 12
     
     for m in moves
-        if (m.from == 56) & (m.to == 41)
+        if (from(m) == 56) & (to(m) == 41)
             make_move!(m,board)
         end
     end
@@ -403,7 +420,7 @@ function test_capture()
     @assert sum(logic.enemy_pieces(board)) > 0
 
     for m in moves
-        if m.capture_type > 0
+        if cap_type(m) > 0
             make_move!(m,board)
         end
     end
@@ -425,8 +442,8 @@ function test_legal()
 
     moves = generate_moves(board)
     @assert length(moves) == 1 "Wknight must capture knight"
-    @assert moves[1].capture_type > 0
-    @assert moves[1].piece_type == val(Knight())
+    @assert cap_type(moves[1]) > 0
+    @assert pc_type(moves[1]) == val(Knight())
 
     #WKing stalemated in corner
     slidingFEN = "K7/7r/8/8/8/8/8/1r4k1 w - 0 1"
@@ -441,7 +458,7 @@ function test_legal()
     moves = generate_moves(board)
     @assert length(moves) == 1 "King moves backwards into check?"
     @assert board.State == Neutral()
-    @assert moves[1].piece_type == val(Bishop())
+    @assert pc_type(moves[1]) == val(Bishop())
 
     #Wking is checkmated as bishop cannot capture rook because pinned by queen
     slidingFEN = "K5Nr/8/8/3B4/8/8/r7/1r5q w - 0 1"
@@ -476,7 +493,7 @@ function test_unmake()
     moves = generate_moves(board)
 
     for m in moves
-        if m.capture_type > 0
+        if cap_type(m) > 0
             make_move!(m,board)
         end
     end
@@ -488,21 +505,21 @@ function test_unmake()
 
     moves = generate_moves(board)
     for m in moves
-        if m.to == 8
+        if to(m) == 8
             make_move!(m,board)
         end
     end
     @assert logic.enemy_pieces(board)[1] == UInt(1) << 8
     moves = generate_moves(board)
     for m in moves
-        if m.to == 16
+        if to(m) == 16
             make_move!(m,board)
         end
     end
     @assert logic.enemy_pieces(board)[5] == UInt(1) << 16
     moves = generate_moves(board)
     for m in moves
-        if m.capture_type == 5
+        if cap_type(m) == 5
             make_move!(m,board)
         end
     end
@@ -532,7 +549,7 @@ function test_repetition()
             else
                 pos = 63
             end
-            if (m.from == pos) | (m.to == pos)
+            if (from(m) == pos) | (to(m) == pos)
                 make_move!(m,board)
                 break
             end
@@ -549,7 +566,7 @@ function test_UCI()
     str2 = logic.UCIpos(63)
     @assert (str1 == "a8") & (str2 == "h1")
 
-    move = Move(1,2,54,0,0)
+    move = Move(UInt8(1),UInt8(2),UInt8(54),UInt8(0),UInt8(0))
     mvstr = UCImove(move)
     @assert mvstr == "c8g2"
 end
@@ -562,16 +579,16 @@ function test_sliding()
 
     moves = generate_moves(board)
     @assert length(moves) == 23
-    @assert count(i->(i.capture_type > 0),moves) == 2
+    @assert count(i->(cap_type(i) > 0),moves) == 2
 
     for m in moves
-        if m.capture_type == val(Rook())
+        if cap_type(m) == val(Rook())
             make_move!(m,board)
         end
     end
     newmoves = generate_moves(board)
     @assert length(newmoves) == 12
-    @assert count(i->(i.capture_type == val(Queen())),newmoves) == 1
+    @assert count(i->(cap_type(i) == val(Queen())),newmoves) == 1
 end
 test_sliding()
 
@@ -579,7 +596,7 @@ function test_Zobrist()
     board = Boardstate(FEN)
     moves = generate_moves(board)
     for move in moves
-       if (move.from == 57) & (move.to == 40)
+       if (from(move) == 57) & (to(move) == 40)
         make_move!(move,board)
        end
     end
@@ -591,19 +608,19 @@ function test_Zobrist()
     #should end up back at start position
     moves = generate_moves(board)
     for move in moves
-       if (move.from == 1) & (move.to == 16)
+       if (from(move) == 1) & (to(move) == 16)
         make_move!(move,board)
        end
     end
     moves = generate_moves(board)
     for move in moves
-       if (move.from == 40) & (move.to == 57)
+       if (from(move) == 40) & (to(move) == 57)
         make_move!(move,board)
        end
     end
     moves = generate_moves(board)
     for move in moves
-       if (move.from == 16) & (move.to == 1)
+       if (from(move) == 16) & (to(move) == 1)
         make_move!(move,board)
        end
     end

@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.2"
+julia_version = "1.11.4"
 manifest_format = "2.0"
 project_hash = "aaf737d98b1889053a96ee2c077582aaee01a790"
 
@@ -451,6 +451,10 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
+[[deps.Profile]]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+version = "1.11.0"
+
 [[deps.PulseAudio_jll]]
 deps = ["Artifacts", "BlueZ_jll", "Dbus_jll", "FFTW_jll", "GStreamer_jll", "Gdbm_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Libtool_jll", "OpenSSL_jll", "SBC_jll", "SoXResampler_jll", "SpeexDSP_jll", "alsa_jll", "eudev_jll", "libasyncns_jll", "libcap_jll", "libsndfile_jll"]
 git-tree-sha1 = "df6d51f380df6e16fdae052e15bd2c02a17fe98f"
@@ -476,13 +480,13 @@ version = "1.3.1"
 
 [[deps.RevisionistV01]]
 deps = ["Random", "logic"]
-path = "C:\\Users\\fwdan\\JuliaProjects\\ChessJulia\\Engines\\RevisionistV01"
+path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV01"
 uuid = "2ba3440e-9551-40af-bd9f-ce36b41a2b46"
 version = "0.0.1"
 
 [[deps.RevisionistV02]]
-deps = ["Random", "StaticArrays", "logic"]
-path = "C:\\Users\\fwdan\\JuliaProjects\\ChessJulia\\Engines\\RevisionistV02"
+deps = ["Profile", "Random", "StaticArrays", "logic"]
+path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV02"
 uuid = "3ba3440e-9551-40af-bd9f-ce36b41a2b46"
 version = "0.2.0"
 
@@ -796,10 +800,10 @@ uuid = "c5f90fcd-3b7e-5836-afba-fc50a0988cb2"
 version = "1.4.0+0"
 
 [[deps.logic]]
-deps = ["InteractiveUtils", "JLD2", "Random", "StaticArrays"]
-path = "C:\\Users\\fwdan\\JuliaProjects\\ChessJulia\\logic"
+deps = ["InteractiveUtils", "JLD2", "Profile", "Random", "StaticArrays"]
+path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\logic"
 uuid = "71af330d-9551-40af-bd9f-dd36b4d12b46"
-version = "1.0.0"
+version = "1.1.0"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
