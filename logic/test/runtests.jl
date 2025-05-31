@@ -1,4 +1,5 @@
 using logic
+using Profile
 using BenchmarkTools
 
 const expensive = true
@@ -93,7 +94,8 @@ test_identifylocs()
 function test_movfromloc()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
-    moves = logic.moves_from_location(logic.val(King()),logic.enemy_pieces(board),UInt64(3),2,false)
+    moves = Vector{Move}()
+    logic.moves_from_location!(logic.val(King()),moves,logic.enemy_pieces(board),UInt64(3),2,false)
     @assert length(moves) == 2
     @assert moves[1].capture_type == 0
     @assert moves[2].from == 2
@@ -668,7 +670,7 @@ if expensive
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
     #benchmarkspeed(leaves)
-    #best = 1.235e7
+    #best = 9.2e7 nps
 end
 
 println("All tests passed")

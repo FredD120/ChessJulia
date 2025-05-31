@@ -1,7 +1,9 @@
 using RevisionistV02
 using logic
+using Profile
 
-const benchmark = true
+const benchmark = false
+const profil = true
 
 function test_index()
     pos = 17
@@ -128,13 +130,14 @@ function bench()
     total_t = 0
     eval_t = 0
     movegen_t = 0
-    for p in positions
+    for p in positions[1:15]
         FEN = split(split(p,";")[1],"- bm")[1]*"0"
         println("testing $FEN")
         board = Boardstate(FEN)
         t = time()
         best,log = best_move(board)
         total_t += time() - t
+        println("Completed. Took $(time() - t) seconds.")
         eval_t += log.evaltime
         movegen_t += log.movegentime    
     end
@@ -142,10 +145,31 @@ function bench()
     println("Took $total_t seconds. $eval_t s evaluating positions, $movegen_t s generating moves.")
 end
 
+function profile()
+    positions = readlines("$(dirname(@__DIR__))/test/test_positions.txt")
+
+    #slow position
+    FEN = split(split(positions[12],";")[1],"- bm")[1]*"0"
+    board = Boardstate(FEN)
+
+    best,log = best_move(board)
+
+    @profile best_move(board)
+    Profile.print()
+end
+if profil 
+    profile()
+end
+
 if benchmark
     bench()
     println("All tests passed")
+
+    #best for 1st 15 positions:
+    #43 seconds total
+    #24.2 seconds evaluation
+    #18.3 seconds move gen
 else
-    println("All cheap tests passed")   
+    println("All cheap tests passed") 
 end
 
