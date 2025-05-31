@@ -13,7 +13,7 @@ module logic
 
 ###OPTIMISATIONS
 #Fold move struct into single 32 bit int and create helper functions to decode
-#Turn identify_locations into an iterator
+
 
 #=
 To check generated code:
@@ -217,6 +217,31 @@ function identify_locations(pieceBB::Integer)::Vector{UInt8}
     return locations
 end
 
+"Define start of iterator through locations in a bitboard"
+function Base.iterate(BB::UInt64) 
+    if BB == 0
+        return nothing
+    else
+        next_state = BB & (BB-1)
+        first_item = trailing_zeros(BB)
+        return first_item,next_state
+    end
+end
+
+"Returns next (item, state) in iterator through locations in a bitboard"
+function Base.iterate(BB::UInt64,state::UInt64) 
+    if state == 0
+        return nothing
+    else
+        next_state = state & (state-1)
+        next_item = trailing_zeros(state)
+        return next_item,next_state
+    end
+end
+
+"Define length of occupied positions in BB"
+Base.length(BB::UInt64) = count_ones(BB)
+
 "loop through a list of piece BBs for one colour and return ID of enemy piece at a location"
 function identify_piecetype(one_side_BBs::Vector{UInt64},location::Integer)::UInt8
     ID = NULL_PIECE
@@ -251,7 +276,7 @@ end
 
 "Helper function to modify Zhash based on en-passant"
 function ZhashEP!(ZHash,enpassant)
-    for EP in identify_locations(enpassant)
+    for EP in enpassant
         file = EP % 8
         #use first rank of black pawns
         ZHash ⊻= ZobristKeys[64*(11)+file+1]
@@ -268,7 +293,7 @@ ZKeyColour() = ZobristKeys[end]
 function generate_hash(pieces,Whitesmove,castling,enpassant)
     ZHash = UInt64(0)
     for (pieceID,pieceBB) in enumerate(pieces)
-        for loc in identify_locations(pieceBB)
+        for loc in pieceBB
             ZHash ⊻= ZKey_piece(pieceID,loc)
         end
     end
@@ -463,7 +488,7 @@ function all_poss_moves(pc_list::Vector{UInt64},all_pcs,Whitesmove::Bool)::UInt6
     attacks = UInt64(0)
 
     for (pieceBB,type) in zip(pc_list[1:end-1],piecetypes[1:end-1])
-        for location in identify_locations(pieceBB)
+        for location in pieceBB
             attacks |= possible_moves(type,location,all_pcs)
         end
     end
@@ -487,7 +512,7 @@ function detect_pins(pos,pc_list,all_pcs,ally_pcs)
     #start by adding attacker to pin line
     rookpins = rpin_attacks & (pc_list[val(Rook())] | pc_list[val(Queen())])
     #iterate through rooks/queens pinning king
-    for loc in identify_locations(rookpins)
+    for loc in rookpins
         #add squares on pin line to pinning BB
         rookpins |= rook_no_blocks & possible_moves(Rook(),loc,blocks_removed)
     end
@@ -496,7 +521,7 @@ function detect_pins(pos,pc_list,all_pcs,ally_pcs)
     bishop_no_blocks = possible_moves(Bishop(),pos,blocks_removed) 
     bpin_attacks = bishop_no_blocks & ~slide_attacks
     bishoppins = bpin_attacks & (pc_list[val(Bishop())] | pc_list[val(Queen())])
-    for loc in identify_locations(bishoppins)
+    for loc in bishoppins
         bishoppins |= bishop_no_blocks & possible_moves(Bishop(),loc,blocks_removed)
     end
 
@@ -524,7 +549,7 @@ function attack_info(pc_list::Vector{UInt64},all_pcs::UInt64,position,KingBB,Whi
             for piece in [Rook(),Bishop()]
                 kingmoves = possible_moves(piece,position,all_pcs)
                 slide_attckers = kingmoves & (pc_list[val(piece)] | pc_list[val(Queen())])
-                for attack_pos in identify_locations(slide_attckers)
+                for attack_pos in slide_attckers
                     attackmoves = possible_moves(piece,attack_pos,all_pcs)
                     blocks |= attackmoves & kingmoves
                 end
@@ -546,8 +571,7 @@ end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
 function moves_from_location!(type::UInt8,moves,enemy_pcs::Vector{UInt64},destinations::UInt64,origin,isattack::Bool)
-    locs = identify_locations(destinations)
-    for loc in locs
+    for loc in destinations
         attacked_pieceID = NULL_PIECE
         if isattack
             #move struct needs info on piece being attacked
@@ -628,7 +652,7 @@ function get_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_p
 
     for (BB,type,rpins,bpins) in zip([unpinnedBB,RpinnedBB,BpinnedBB],[Queen(),Rook(),Bishop()],
         [typemax(UInt64),rookpins,typemax(UInt64)],[typemax(UInt64),typemax(UInt64),bishoppins])
-        for loc in identify_locations(BB)
+        for loc in BB
             legal = legal_moves(type,loc,all_pcs,rpins,bpins,info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
@@ -645,7 +669,7 @@ function get_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pc
     pinnedBB = pinned(piece,pieceBB,rookpins)
 
     for (BB,rpins) in zip([pinnedBB,unpinnedBB],[rookpins,typemax(UInt64)])
-        for loc in identify_locations(BB)
+        for loc in BB
             legal = legal_moves(piece,loc,all_pcs,rpins,typemax(UInt64),info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
@@ -662,7 +686,7 @@ function get_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_
     pinnedBB = pinned(piece,pieceBB,bishoppins)
 
     for (BB,bpins) in zip([pinnedBB,unpinnedBB],[bishoppins,typemax(UInt64)])
-        for loc in identify_locations(BB)
+        for loc in BB
             legal = legal_moves(piece,loc,all_pcs,typemax(UInt64),bpins,info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
@@ -676,7 +700,7 @@ end
 function get_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
     #split into pinned and unpinned pieces, only unpinned knights can move
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
-    for loc in identify_locations(unpinnedBB)
+    for loc in unpinnedBB
         legal = legal_moves(piece,loc,all_pcs,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
@@ -687,7 +711,7 @@ end
 
 "returns attacks, quiet moves and castles for king only if legal, based on checks"
 function get_moves!(piece::King,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,castlrts,colID,info::LegalInfo)
-    for loc in identify_locations(pieceBB)
+    for loc in pieceBB
         legal = legal_moves(piece,loc,all_pcs,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
 
@@ -743,25 +767,25 @@ end
 
 "Create list of pawn push moves with a given flag"
 function push_moves!(moves,singlepush,promotemask,shift,blocks,flag)
-    for q1 in identify_locations(singlepush & blocks & promotemask)
+    for q1 in (singlepush & blocks & promotemask)
         append_moves!(moves,val(Pawn()),q1+shift,q1,NULL_PIECE,flag)
     end
 end
 
 "Create list of double pawn push moves"
 function push_moves!(moves,doublepush,shift,blocks)
-    for q2 in identify_locations(doublepush & blocks)
+    for q2 in (doublepush & blocks)
         push!(moves,Move(val(Pawn()),q2+2*shift,q2,NULL_PIECE,DPUSH))
     end
 end
 
 "Create list of pawn capture moves with a given flag"
 function capture_moves!(moves,leftattack,rightattack,promotemask,shift,enemy_pcs,checks,enemy_vec::Vector{UInt64},flag)
-    for la in identify_locations(leftattack & enemy_pcs & promotemask & checks)
+    for la in (leftattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,la)
         append_moves!(moves,val(Pawn()),la+shift+1,la,attack_pcID,flag)
     end
-    for ra in identify_locations(rightattack & enemy_pcs & promotemask & checks)
+    for ra in (rightattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,ra)
         append_moves!(moves,val(Pawn()),ra+shift-1,ra,attack_pcID,flag)
     end
@@ -793,10 +817,10 @@ end
 
 "Create list of pawn en-passant moves"
 function EP_moves!(movelist,leftattack,rightattack,shift,EP_sqs,checks,all_pcs,enemy_vec,kingpos)
-    for la in identify_locations(leftattack & EP_sqs)  
+    for la in (leftattack & EP_sqs)  
         push_EP!(movelist,la+shift+1,la,shift,checks,all_pcs,enemy_vec,kingpos)
     end
-    for ra in identify_locations(rightattack & EP_sqs)
+    for ra in (rightattack & EP_sqs)
         push_EP!(movelist,ra+shift-1,ra,shift,checks,all_pcs,enemy_vec,kingpos)
     end
 end
