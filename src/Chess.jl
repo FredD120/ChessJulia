@@ -328,8 +328,9 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
-    #FEN = "k7/r7/r7/8/8/8/8/7K w - - 0 1" 
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
+
+    FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
@@ -339,7 +340,7 @@ function main()
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
     bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
-    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN)
+    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN,true)
 
 end
 main()

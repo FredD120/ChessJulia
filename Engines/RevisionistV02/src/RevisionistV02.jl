@@ -14,45 +14,6 @@ const INF::Int32 = typemax(Int32) - 1000
 
 #maximum search depth
 const DEPTH::UInt8 = 4 
-#number of pieces left when endgame begins
-const EGBEGIN = 12
-
-function get_PST(type)
-    data = Vector{Float32}()
-    data_str = readlines("$(dirname(@__DIR__))/PST/$(type).txt")
-    for d in data_str
-        push!(data, parse(Float32,d))
-    end   
-    return data
-end
-
-function PST(stage="")
-    PawnPST::SVector{64,Float32} = get_PST("pawn"*stage)
-    KnightPST::SVector{64,Float32} = get_PST("knight"*stage)
-    BishopPST::SVector{64,Float32} = get_PST("bishop"*stage)
-    RookPST::SVector{64,Float32} = get_PST("rook"*stage)
-    QueenPST::SVector{64,Float32} = get_PST("queen"*stage)
-    KingPST::SVector{64,Float32} = get_PST("king"*stage)
-    return SVector{6,SVector{64,Float32}}([KingPST,QueenPST,RookPST,BishopPST,KnightPST,PawnPST])
-end
-
-const PSTs = PST()
-const EGPSTs = PST("EG")
-
-"If more than EGBEGIN+2 pieces lost, set to 0. Between 0 and EGBEGIN+2 pieces lost, decrease linearly from 1 to 0"
-function MGweighting(pc_remaining)::Float32 
-    pc_lost = 24 - pc_remaining
-    grad = -1/(EGBEGIN+2)
-    weight = 1 + grad*pc_lost
-    return max(0,weight)
-end
-
-"If more than EGBEGIN+2 pieces remaining, set to 0. Between EGBEGIN+2 and 2 remaining increase linearly to 1"
-function EGweighting(pc_remaining)::Float32 
-    grad = -1/EGBEGIN
-    weight = 1 + grad*(pc_remaining-2)
-    return max(0,weight)
-end
 
 mutable struct Logger
     best_score::Int32
@@ -70,23 +31,30 @@ eval(::Draw,depth) = Int32(0)
 "Constant evaluation of being checkmated (favour quicker mates)"
 eval(::Loss,depth) = -INF - depth
 
-"Returns score of current position from whites perspective. Value calculated as a Float then rounded to an Int"
-function evaluate(board::Boardstate)::Int32
-    score = Float32(0)
-    num_pieces = count_pieces(board.pieces)
-    MG = MGweighting(num_pieces)
-    EG = EGweighting(num_pieces)
+#number of pieces left when endgame begins
+const EGBEGIN = 12
 
-    for (type,MG_PST,EG_PST) in zip(piecetypes,PSTs,EGPSTs)
-        for colour in [White(),Black()]
-            for pos in identify_locations(board.pieces[ColourPieceID(colour,type)])
-                ind = side_index(colour,pos)
-                score += sgn(colour)*MG*MG_PST[ind+1]
-                score += sgn(colour)*EG*EG_PST[ind+1]
-            end
-        end
-    end
-    return convert(Int32,round(score))
+"If more than EGBEGIN+2 pieces lost, set to 0. Between 0 and EGBEGIN+2 pieces lost, decrease linearly from 1 to 0"
+function MGweighting(pc_remaining)::Float32 
+    pc_lost = 24 - pc_remaining
+    grad = -1/(EGBEGIN+2)
+    weight = 1 + grad*pc_lost
+    return max(0,weight)
+end
+
+"If more than EGBEGIN+2 pieces remaining, set to 0. Between EGBEGIN+2 and 2 remaining increase linearly to 1"
+function EGweighting(pc_remaining)::Float32 
+    grad = -1/EGBEGIN
+    weight = 1 + grad*(pc_remaining-2)
+    return max(0,weight)
+end
+
+"Returns score of current position from whites perspective"
+function evaluate(board::Boardstate)::Int32
+    num_pieces = count_pieces(board.pieces)
+    score = board.PSTscore[1]*MGweighting(num_pieces) + board.PSTscore[2]*EGweighting(num_pieces)
+    
+    return Int32(round(score))
 end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"

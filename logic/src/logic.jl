@@ -8,11 +8,11 @@ module logic
 #Can force definite types for function dispatch, will create union of types that are slow if too many
 
 ###FEATURES
-#Include PSTs, updated in make/unmake by create! and destroy!
 #Generate attacks seperately for quiescence 
-#Test for check/stale-mate
+#Test for check/stale-mate as a seperate function
 
 ###OPTIMISATIONS
+#Try removing multiple dispatch and renaming move generating functions
 
 ###REFACTOR
 
@@ -240,6 +240,56 @@ setone(num::UInt64,index::Integer) = num | (UInt64(1) << index)
 
 setzero(num::UInt64,index::Integer) = num & ~(UInt64(1) << index)
 
+#We dynamically update the PST evaluation in move make and unmake
+#It is stored in the board struct but not in board history
+#This saves looping over all pieces in position evaluation 
+
+"Retrieve piece square tables from file"
+function get_PST(type)
+    data = Vector{Float32}()
+    data_str = readlines("$(dirname(@__DIR__))/PST/$(type).txt")
+    for d in data_str
+        push!(data, parse(Float32,d))
+    end   
+    return data
+end
+
+"Setup vectors containing the PSTs"
+function PST(stage="")
+    PawnPST::SVector{64,Float32} = get_PST("pawn"*stage)
+    KnightPST::SVector{64,Float32} = get_PST("knight"*stage)
+    BishopPST::SVector{64,Float32} = get_PST("bishop"*stage)
+    RookPST::SVector{64,Float32} = get_PST("rook"*stage)
+    QueenPST::SVector{64,Float32} = get_PST("queen"*stage)
+    KingPST::SVector{64,Float32} = get_PST("king"*stage)
+    return SVector{6,SVector{64,Float32}}([KingPST,QueenPST,RookPST,BishopPST,KnightPST,PawnPST])
+end
+
+const MG_PSTs = PST()
+const EG_PSTs = PST("EG")
+
+"Simulaneously update mid- and end-game PST scores from white's perspective"
+function update_PST_score!(score::Vector{Int32},colour,type_val,pos,add_or_remove)
+    #+1 if adding, -1 if removing * +1 if white, -1 if black
+    sign = sgn(colour)*add_or_remove 
+    ind = side_index(colour,pos)
+
+    score[1] += sign*MG_PSTs[type_val][ind+1]
+    score[2] += sign*EG_PSTs[type_val][ind+1]
+end
+
+"Returns score of current position from whites perspective. used when initialising boardstate"
+function set_PST!(score::Vector{Int32},pieces::Vector{UInt64})
+    for type in piecetypes
+        for colour in [White(),Black()]
+            for pos in identify_locations(pieces[ColourPieceID(colour,type)])
+                update_PST_score!(score,colour,val(type),pos,+1)
+            end
+        end
+    end
+    return score
+end
+
 struct Neutral end
 struct Loss end
 struct Draw end
@@ -261,6 +311,7 @@ mutable struct Boardstate
     Castle::UInt8
     EnPass::UInt64
     State::GameState
+    PSTscore::Vector{Int32}
     ZHash::UInt64
     MoveHist::Vector{UInt32}
     Data::BoardData
@@ -377,6 +428,7 @@ function Boardstate(FEN)
     EnPassant = UInt64(0)
     Halfmoves = UInt8(0)
     Colour = White()
+    PSTscore = zeros(Int32,2)
     MoveHistory = Vector{UInt32}()
     rank = nothing
     file = nothing
@@ -443,7 +495,8 @@ function Boardstate(FEN)
                      Vector{UInt64}([EnPassant]),Vector{UInt8}([0]),
                      Vector{UInt64}([Zobrist]))
 
-    Boardstate(pieces,Colour,Castling,EnPassant,Neutral(),Zobrist,MoveHistory,data)
+    set_PST!(PSTscore,pieces)
+    Boardstate(pieces,Colour,Castling,EnPassant,Neutral(),PSTscore,Zobrist,MoveHistory,data)
 end
 
 "convert a position from number 0-63 to rank/file notation"
@@ -977,6 +1030,7 @@ end
 function destroy_piece!(B::Boardstate,colour,pieceID,pos)
     CpieceID = ColourPieceID(colour, pieceID)
     B.pieces[CpieceID] = setzero(B.pieces[CpieceID],pos)
+    update_PST_score!(B.PSTscore,colour,pieceID,pos,-1)
     B.ZHash ⊻= ZKey_piece(CpieceID,pos)
 end
 
@@ -984,6 +1038,7 @@ end
 function create_piece!(B::Boardstate,colour,pieceID,pos)
     CpieceID = ColourPieceID(colour, pieceID)
     B.pieces[CpieceID] = setone(B.pieces[CpieceID],pos)
+    update_PST_score!(B.PSTscore,colour,pieceID,pos,+1)
     B.ZHash ⊻= ZKey_piece(CpieceID,pos)
 end
 
@@ -1141,6 +1196,7 @@ function unmake_move!(board::Boardstate)
         board.State = Neutral()
         move = board.MoveHist[end]
         mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag = unpack_move(move::UInt32)
+
 
         if (mv_flag == KCASTLE)|(mv_flag == QCASTLE)
             move_piece!(board,OppCol,val(Rook()),mv_to,mv_from)

@@ -633,6 +633,42 @@ function test_Zobrist()
 end
 test_Zobrist()
 
+function PSTperft(board::Boardstate,depth)
+    moves = generate_moves(board)
+
+    if depth > 1
+        for move in moves
+            make_move!(move,board)
+            static_eval = zeros(Int32,2)
+            logic.set_PST!(static_eval,board.pieces)
+            @assert board.PSTscore == static_eval "Score doesn't match. Dynamic = $(board.PSTscore), static = $(static_eval). Found on move $(show(move))"
+            perft(board,depth-1)
+            unmake_move!(board)
+        end
+    end
+end
+
+function test_PST()
+    FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+    board = Boardstate(FEN)
+    PSTperft(board,3)
+end
+test_PST()
+
+function test_PSTeval()
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    board = Boardstate(FEN)
+
+    @assert board.PSTscore == [0,0] "Start pos should be neutral"
+
+    FEN = "8/P6k/K7/8/8/8/8/8 w - - 0 1"
+    board = Boardstate(FEN)
+    
+    @assert board.PSTscore[1] >= 100 "Position is worth at least 100 centipawns to white in midgame"
+    @assert board.PSTscore[2] >= 100 "Position is worth at least 100 centipawns to white in endgame"
+end
+test_PSTeval()
+
 function test_perft()
     basicFEN = "K7/8/8/8/8/8/8/7k w - - 0 1"
     board = Boardstate(basicFEN)
