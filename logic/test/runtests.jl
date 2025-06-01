@@ -124,7 +124,7 @@ function test_legalinfo()
     simpleFEN = "K7/R7/8/8/8/8/8/r6q w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,White())
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
@@ -133,7 +133,7 @@ function test_legalinfo()
     simpleFEN = "K7/7R/8/8/8/8/8/qq6 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,White())
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
     @assert length(info.blocks) == 6 "6 squares blocking queen attack"
 
     simpleFEN = "4k3/8/8/8/4q3/8/4B3/1Q2K3 w - 0 1"
@@ -141,7 +141,7 @@ function test_legalinfo()
     all_pcs = logic.BBunion(board.pieces)
     kingBB = logic.ally_pieces(board)[val(King())]
     kingpos = LSB(kingBB)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,White())
+    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,true)
 
     @assert info.blocks == typemax(UInt64)
     @assert info.checks == typemax(UInt64)
@@ -303,7 +303,7 @@ function test_attckpcs()
     all_pcs = logic.BBunion(board.pieces)
     kingpos = LSB(board.pieces[val(King())])
 
-    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,White())
+    checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,true)
     @assert checkers == (UInt64(1)<<8)|(UInt64(1)<<11)|(UInt64(1)<<23)|(UInt64(1)<<62) "2 sliding piece attacks, a knight and a pawn"
 end
 test_attckpcs()
@@ -312,7 +312,7 @@ function test_allposs()
     simpleFEN = "R1R1R1R1/8/8/8/8/8/8/1R1R1R1R b - - 0 1"
     board = Boardstate(simpleFEN) 
     all_pcs = logic.BBunion(board.pieces)  
-    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs,board.Colour)
+    attkBB = logic.all_poss_moves(logic.enemy_pieces(board),all_pcs,Whitesmove(board.Colour))
 
     @assert attkBB == typemax(UInt64) "rooks are covering all squares"
 end
