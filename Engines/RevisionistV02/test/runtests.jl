@@ -130,7 +130,7 @@ function bench()
     total_t = 0
     eval_t = 0
     movegen_t = 0
-    for p in positions[1:15]
+    for p in positions[1:30]
         FEN = split(split(p,";")[1],"- bm")[1]*"0"
         println("testing $FEN")
         board = Boardstate(FEN)
@@ -166,10 +166,10 @@ if benchmark
     bench()
     println("All tests passed")
 
-    #best for 1st 15 positions:
-    #3.2 seconds total
-    #0.03 seconds evaluation
-    #2.9 seconds move gen
+    #best for 1st 30 positions:
+    #2.6 seconds total
+    #0.08 seconds evaluation
+    #2.1 seconds move gen
 else
     println("All cheap tests passed") 
 end
