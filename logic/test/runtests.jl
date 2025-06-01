@@ -633,8 +633,12 @@ function test_Zobrist()
 end
 test_Zobrist()
 
-function PSTperft(board::Boardstate,depth)
+function Testing_perft(board::Boardstate,depth)
     moves = generate_moves(board)
+    attacks = generate_attacks(board)
+    num_attacks = count(m->cap_type(m)>0,moves)
+
+    @assert length(attacks) == num_attacks "Wrong number of attacks generated. Should be $(num_attacks), got $(length(attacks))."
 
     if depth > 1
         for move in moves
@@ -642,18 +646,24 @@ function PSTperft(board::Boardstate,depth)
             static_eval = zeros(Int32,2)
             logic.set_PST!(static_eval,board.pieces)
             @assert board.PSTscore == static_eval "Score doesn't match. Dynamic = $(board.PSTscore), static = $(static_eval). Found on move $(show(move))"
-            perft(board,depth-1)
+            Testing_perft(board,depth-1)
             unmake_move!(board)
         end
     end
 end
 
-function test_PST()
+function test_with_perft()
+    #Test that PST values from incremental upadate are not different from static evaluation
+    #Also that number of attacks from generate_attacks is the same as from generate_moves(all)
+
     FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
     board = Boardstate(FEN)
-    PSTperft(board,3)
+    Testing_perft(board,4)
+
+    FEN = "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1"
+    board = Boardstate(FEN)
+    Testing_perft(board,4)
 end
-test_PST()
 
 function test_PSTeval()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -719,11 +729,12 @@ function benchmarkspeed(leafcount)
 end
 
 if expensive
+    test_with_perft()
     leaves,Δt = test_speed()
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
     #benchmarkspeed(leaves)
-    #best = 2.1e7 nps
+    #best = 6.9e7 nps
 end
 
 println("All tests passed")

@@ -1,19 +1,16 @@
 module logic
 
 ###TO THINK ABOUT###
-#How much data is being passed around by functions unnecessarily?
-#Is there code branching due to type instability?
-#Decide function once then repeatedly call it (functions have different types -> type instability)
-#Vs call function repeatedly and choose each time (for only two cheap functions is ok)
-#Can force definite types for function dispatch, will create union of types that are slow if too many
 
-###FEATURES
-#Generate attacks seperately for quiescence 
+###FEATURES### 
 #Test for check/stale-mate as a seperate function
 
-###OPTIMISATIONS
+###OPTIMISATIONS###
 
-###REFACTOR
+###REFACTOR###
+#Make views into ally and enemy pieces
+#Put pins inside legal_info
+#Separate move_gen and boardstate/move making into different files
 
 #=
 To check generated code:
@@ -28,7 +25,7 @@ King, Queen, Rook, Bishop, Knight, Pawn, white, black, val, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
-ColourPieceID
+ColourPieceID, generate_attacks
 
 using InteractiveUtils
 using JLD2
@@ -759,10 +756,11 @@ function legal_queen_moves(loc,all_pcs,rookpins,bishoppins,info::LegalInfo)
     return legal_rook | legal_bishop
 end
 
-"Bitboard logic to get attacks and quiets for king from legal moves"
-function QAtt(legal,all_pcs,enemy_pcs)
+"Bitboard logic to get attacks and quiets from legal moves"
+function QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY::UInt64)
     attacks = attack_moves(legal,enemy_pcs)
-    quiets = quiet_moves(legal,all_pcs)
+    #set quiets to zero if only generating attacks
+    quiets = quiet_moves(legal,all_pcs) * ATTACKONLY
     return quiets,attacks
 end
 
@@ -773,7 +771,7 @@ pinned(::Bishop,pieceBB,bishoppins) = pieceBB & bishoppins
 pinned(::Rook,pieceBB,rookpins) = pieceBB & rookpins
 
 "returns attack and quiet moves only if legal, based on checks and pins"
-function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,ATTACKONLY,info::LegalInfo)
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     RpinnedBB = pinned(Rook(),pieceBB,rookpins)
@@ -781,7 +779,7 @@ function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},e
 
     for loc in unpinnedBB
         legal = legal_queen_moves(loc,all_pcs,typemax(UInt64),typemax(UInt64),info)
-        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
         moves_from_location!(val(Queen()),moves,enemy_vec,quiets,loc,false)
         moves_from_location!(val(Queen()),moves,enemy_vec,attacks,loc,true)
@@ -789,7 +787,7 @@ function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},e
 
     for loc in RpinnedBB
         legal = legal_rook_moves(loc,all_pcs,rookpins,info)
-        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
         moves_from_location!(val(Queen()),moves,enemy_vec,quiets,loc,false)
         moves_from_location!(val(Queen()),moves,enemy_vec,attacks,loc,true)
@@ -798,7 +796,7 @@ function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},e
 
     for loc in BpinnedBB
         legal = legal_bishop_moves(loc,all_pcs,bishoppins,info)
-        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
         moves_from_location!(val(Queen()),moves,enemy_vec,quiets,loc,false)
         moves_from_location!(val(Queen()),moves,enemy_vec,attacks,loc,true)
@@ -806,7 +804,7 @@ function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},e
 end
 
 "returns attack and quiet moves only if legal for rook, based on checks and pins"
-function get_rook_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_rook_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,ATTACKONLY,info::LegalInfo)
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     pinnedBB = pinned(piece,pieceBB,rookpins)
@@ -814,7 +812,7 @@ function get_rook_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},ene
     for (BB,rpins) in zip([pinnedBB,unpinnedBB],[rookpins,typemax(UInt64)])
         for loc in BB
             legal = legal_rook_moves(loc,all_pcs,rpins,info)
-            quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+            quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
             moves_from_location!(val(piece),moves,enemy_vec,quiets,loc,false)
             moves_from_location!(val(piece),moves,enemy_vec,attacks,loc,true)
@@ -823,7 +821,7 @@ function get_rook_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},ene
 end
 
 "returns attack and quiet moves only if legal for bishop, based on checks and pins"
-function get_bishop_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_bishop_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,ATTACKONLY,info::LegalInfo)
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     pinnedBB = pinned(piece,pieceBB,bishoppins)
@@ -831,7 +829,7 @@ function get_bishop_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64}
     for (BB,bpins) in zip([pinnedBB,unpinnedBB],[bishoppins,typemax(UInt64)])
         for loc in BB
             legal = legal_bishop_moves(loc,all_pcs,bpins,info)
-            quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+            quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
             moves_from_location!(val(piece),moves,enemy_vec,quiets,loc,false)
             moves_from_location!(val(piece),moves,enemy_vec,attacks,loc,true)
@@ -840,12 +838,12 @@ function get_bishop_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64}
 end
 
 "returns attack and quiet moves only if legal for knight, based on checks and pins"
-function get_knight_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_knight_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,ATTACKONLY,info::LegalInfo)
     #split into pinned and unpinned pieces, only unpinned knights can move
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     for loc in unpinnedBB
         legal = legal_knight_moves(loc,info)
-        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
         moves_from_location!(val(piece),moves,enemy_vec,quiets,loc,false)
         moves_from_location!(val(piece),moves,enemy_vec,attacks,loc,true)
@@ -853,16 +851,16 @@ function get_knight_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64}
 end
 
 "returns attacks, quiet moves and castles for king only if legal, based on checks"
-function get_king_moves!(piece::King,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,castlrts,colID,info::LegalInfo)
+function get_king_moves!(piece::King,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,castlrts,colID,ATTACKONLY,info::LegalInfo)
     for loc in pieceBB
         legal = legal_king_moves(loc,info)
-        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
+        quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,ATTACKONLY)
 
         moves_from_location!(val(piece),moves,enemy_vec,quiets,loc,false)
         moves_from_location!(val(piece),moves,enemy_vec,attacks,loc,true)
     end
-    #cannot castle out of check
-    if info.attack_num == 0
+    #cannot castle out of check. castling is a quiet move
+    if info.attack_num == 0 && ATTACKONLY == 1
         #index into lookup table containing squares that must be free/not in check to castle
         #must mask out opponent's castle rights
         for castleID in identify_locations(get_Crights(castlrts,(colID+1)%2,0))
@@ -909,15 +907,15 @@ function append_moves!(moves,piece_type,from,to,capture_type,flag::UInt8)
 end
 
 "Create list of pawn push moves with a given flag"
-function push_moves!(moves,singlepush,promotemask,shift,blocks,flag)
-    for q1 in (singlepush & blocks & promotemask)
+function push_moves!(moves,singlepush,promotemask,shift,blocks,flag,ATTACKONLY::UInt64)
+    for q1 in ((singlepush*ATTACKONLY) & blocks & promotemask)
         append_moves!(moves,val(Pawn()),UInt8(q1+shift),q1,NULL_PIECE,flag)
     end
 end
 
 "Create list of double pawn push moves"
-function push_moves!(moves,doublepush,shift,blocks)
-    for q2 in (doublepush & blocks)
+function push_moves!(moves,doublepush,shift,blocks,ATTACKONLY::UInt64)
+    for q2 in ((doublepush*ATTACKONLY) & blocks)
         push!(moves,Move(val(Pawn()),UInt8(q2+2*shift),q2,NULL_PIECE,DPUSH))
     end
 end
@@ -969,7 +967,7 @@ function EP_moves!(movelist,leftattack,rightattack,shift,EP_sqs,checks,all_pcs,e
 end
 
 "returns attack and quiet moves for pawns only if legal, based on checks and pins"
-function get_pawn_moves!(movelist,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,colour::Bool,kingpos,info::LegalInfo)
+function get_pawn_moves!(movelist,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,colour::Bool,kingpos,ATTACKONLY,info::LegalInfo)
     pawnMasks = ifelse(colour,white_masks,black_masks)
 
     #split into pinned and unpinned pieces, then run movegetter seperately on each
@@ -1000,16 +998,16 @@ function get_pawn_moves!(movelist,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,al
     attackright |= Battackright & bishoppins
     
     #add non-promote pushes, promote pushes, double pushes, non-promote captures, promote captures and en-passant
-    push_moves!(movelist, legalpush1, ~pawnMasks.promote, pawnMasks.shift, info.blocks, NOFLAG),
-    push_moves!(movelist, legalpush1, pawnMasks.promote, pawnMasks.shift, info.blocks, Promote()),
-    push_moves!(movelist, legalpush2, pawnMasks.shift, info.blocks),
+    push_moves!(movelist, legalpush1, ~pawnMasks.promote, pawnMasks.shift, info.blocks, NOFLAG,ATTACKONLY),
+    push_moves!(movelist, legalpush1, pawnMasks.promote, pawnMasks.shift, info.blocks, Promote(),ATTACKONLY),
+    push_moves!(movelist, legalpush2, pawnMasks.shift, info.blocks,ATTACKONLY),
     capture_moves!(movelist, attackleft, attackright, ~pawnMasks.promote,pawnMasks.shift,enemy_pcs,info.checks,enemy_vec,NOFLAG),
     capture_moves!(movelist, attackleft, attackright, pawnMasks.promote,pawnMasks.shift,enemy_pcs,info.checks,enemy_vec,Promote()),
     EP_moves!(movelist, attackleft, attackright, pawnMasks.shift,enpassBB,info.checks,all_pcs,enemy_vec,kingpos)
 end
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
-function generate_moves(board::Boardstate)::Vector{UInt32}
+function generate_moves(board::Boardstate,ATTACKONLY::UInt64=UInt64(1))::Vector{UInt32}
     movelist = Vector{UInt32}()
     sizehint!(movelist,40)
 
@@ -1030,25 +1028,25 @@ function generate_moves(board::Boardstate)::Vector{UInt32}
     legal_info = attack_info(enemy,all_pcsBB,kingpos,kingBB,Whitesmove(board.Colour))
 
     get_king_moves!(King(),movelist,kingBB,enemy,enemy_pcsBB,all_pcsBB,
-    board.Castle,ColID(board.Colour),legal_info)
+    board.Castle,ColID(board.Colour),ATTACKONLY,legal_info)
 
     #if multiple checks on king, only king can move
     if legal_info.attack_num <= 1
         #run through pieces and BBs, adding moves to list
         get_knight_moves!(Knight(),movelist,ally[val(Knight())],enemy,
-            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,ATTACKONLY,legal_info)
 
         get_bishop_moves!(Bishop(),movelist,ally[val(Bishop())],enemy,
-            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,ATTACKONLY,legal_info)
         
         get_rook_moves!(Rook(),movelist,ally[val(Rook())],enemy,
-            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,ATTACKONLY,legal_info)
         
         get_queen_moves!(Queen(),movelist,ally[val(Queen())],enemy,
-            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,ATTACKONLY,legal_info)
 
         get_pawn_moves!(movelist,ally[val(Pawn())],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
-        rookpins,bishoppins,Whitesmove(board.Colour),kingpos,legal_info)
+        rookpins,bishoppins,Whitesmove(board.Colour),kingpos,ATTACKONLY,legal_info)
     end
 
     if length(movelist) == 0
@@ -1061,6 +1059,13 @@ function generate_moves(board::Boardstate)::Vector{UInt32}
     end
     return movelist
 end
+
+"helper function that used generate moves create a movelist of all attacking moves (no quiets)"
+function generate_attacks(board::Boardstate)::Vector{UInt32}
+    ATTACKONLY = UInt64(0)
+    return generate_moves(board,ATTACKONLY)
+end
+
 
 "utilises setzero to remove a piece from a position"
 function destroy_piece!(B::Boardstate,colour::UInt8,pieceID,pos)
@@ -1214,7 +1219,7 @@ function make_move!(move::UInt32,board::Boardstate)
     push!(board.MoveHist,move)
     push!(board.Data.ZHashHist,board.ZHash)
 
-    #check if caslting rights have changed
+    #check if castling rights have changed
     if board.Castle == board.Data.Castling[end]
         board.Data.CastleCount[end] += 1
     else
