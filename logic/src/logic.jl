@@ -12,7 +12,6 @@ module logic
 #Test for check/stale-mate as a seperate function
 
 ###OPTIMISATIONS
-#Try removing multiple dispatch and renaming move generating functions
 
 ###REFACTOR
 
@@ -758,7 +757,7 @@ pinned(::Bishop,pieceBB,bishoppins) = pieceBB & bishoppins
 pinned(::Rook,pieceBB,rookpins) = pieceBB & rookpins
 
 "returns attack and quiet moves only if legal, based on checks and pins"
-function get_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_queen_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     RpinnedBB = pinned(Rook(),pieceBB,rookpins)
@@ -777,7 +776,7 @@ function get_moves!(piece::Queen,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_p
 end
 
 "returns attack and quiet moves only if legal for rook, based on checks and pins"
-function get_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_rook_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     pinnedBB = pinned(piece,pieceBB,rookpins)
@@ -794,7 +793,7 @@ function get_moves!(piece::Rook,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pc
 end
 
 "returns attack and quiet moves only if legal for bishop, based on checks and pins"
-function get_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_bishop_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     pinnedBB = pinned(piece,pieceBB,bishoppins)
@@ -811,7 +810,7 @@ function get_moves!(piece::Bishop,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_
 end
 
 "returns attack and quiet moves only if legal for knight, based on checks and pins"
-function get_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
+function get_knight_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,rookpins,bishoppins,info::LegalInfo)
     #split into pinned and unpinned pieces, only unpinned knights can move
     unpinnedBB = pieceBB & ~(rookpins | bishoppins)
     for loc in unpinnedBB
@@ -824,7 +823,7 @@ function get_moves!(piece::Knight,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_
 end
 
 "returns attacks, quiet moves and castles for king only if legal, based on checks"
-function get_moves!(piece::King,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,castlrts,colID,info::LegalInfo)
+function get_king_moves!(piece::King,moves,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,castlrts,colID,info::LegalInfo)
     for loc in pieceBB
         legal = legal_moves(piece,loc,all_pcs,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs)
@@ -941,7 +940,7 @@ function EP_moves!(movelist,leftattack,rightattack,shift,EP_sqs,checks,all_pcs,e
 end
 
 "returns attack and quiet moves for pawns only if legal, based on checks and pins"
-function get_moves!(::Pawn,movelist,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,colour,kingpos,info::LegalInfo)
+function get_pawn_moves!(movelist,pieceBB,enemy_vec::Vector{UInt64},enemy_pcs,all_pcs,enpassBB,rookpins,bishoppins,colour,kingpos,info::LegalInfo)
     pawnMasks = ifelse(Whitesmove(colour),white_masks,black_masks)
 
     #split into pinned and unpinned pieces, then run movegetter seperately on each
@@ -1001,17 +1000,25 @@ function generate_moves(board::Boardstate)::Vector{UInt32}
     rookpins,bishoppins = detect_pins(kingpos,enemy,all_pcsBB,ally_pcsBB)
     legal_info = attack_info(enemy,all_pcsBB,kingpos,kingBB,board.Colour)
 
-    get_moves!(King(),movelist,kingBB,enemy,enemy_pcsBB,all_pcsBB,
+    get_king_moves!(King(),movelist,kingBB,enemy,enemy_pcsBB,all_pcsBB,
     board.Castle,ColID(board.Colour),legal_info)
 
     #if multiple checks on king, only king can move
     if legal_info.attack_num <= 1
         #run through pieces and BBs, adding moves to list
-        for (type,pieceBB) in zip(piecetypes[2:end-1],ally[2:end-1])
-            get_moves!(type,movelist,pieceBB,enemy,
+        get_knight_moves!(Knight(),movelist,ally[val(Knight())],enemy,
             enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
-        end
-        get_moves!(Pawn(),movelist,ally[end],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
+
+        get_bishop_moves!(Bishop(),movelist,ally[val(Bishop())],enemy,
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+        
+        get_rook_moves!(Rook(),movelist,ally[val(Rook())],enemy,
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+        
+        get_queen_moves!(Queen(),movelist,ally[val(Queen())],enemy,
+            enemy_pcsBB,all_pcsBB,rookpins,bishoppins,legal_info)
+
+        get_pawn_moves!(movelist,ally[val(Pawn())],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
         rookpins,bishoppins,board.Colour,kingpos,legal_info)
     end
 

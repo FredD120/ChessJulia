@@ -164,14 +164,15 @@ function promote_move!(logicstate,index,legal_moves,BOT)
     GUImove!(legal_moves[moveID],logicstate,BOT)
 end
 
-function promote_squares(prompos,Whitesmove,position)
-    inc = ifelse(Whitesmove==0,8,-8)
+"If pawn is promoting, highlight possible promotions to display on GUI"
+function promote_squares(prompos,Whitemove,position)
+    inc = ifelse(Whitemove==0,8,-8)
     highlight = []
     Ptype = [val(Queen()),val(Rook()),val(Bishop()),val(Knight())]
     for i in 0:3
         pos = prompos+i*inc
         push!(highlight,pos)
-        position[pos+1] = Ptype[i+1]+Whitesmove*Black
+        position[pos+1] = Ptype[i+1]+Whitemove*val(Black())
     end
     return highlight,position
 end
@@ -328,9 +329,7 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
-
-    FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)

@@ -167,9 +167,9 @@ if benchmark
     println("All tests passed")
 
     #best for 1st 15 positions:
-    #9.0 seconds total
-    #0.1 seconds evaluation
-    #8.3 seconds move gen
+    #3.2 seconds total
+    #0.03 seconds evaluation
+    #2.9 seconds move gen
 else
     println("All cheap tests passed") 
 end
