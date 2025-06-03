@@ -81,5 +81,5 @@ function main()
 end
 main()
 
-#Perft suite average NPS = 6.90e7
+#Perft suite average NPS = 7.35e7
 

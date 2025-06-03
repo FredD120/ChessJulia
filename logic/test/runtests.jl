@@ -93,10 +93,8 @@ function test_iterators()
     pieces::Vector{UInt64}
     wpieces = logic.ally_pieces(board)
     @assert length(wpieces) == 6
-    @assert typeof(wpieces) == typeof(Vector{UInt64}())
     bpieces = logic.enemy_pieces(board)
     @assert length(bpieces) == 6
-    @assert typeof(bpieces) == typeof(Vector{UInt64}())
 end
 test_iterators()
 
