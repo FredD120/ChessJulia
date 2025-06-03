@@ -3,14 +3,12 @@ module logic
 ###TO THINK ABOUT###
 
 ###FEATURES###
-#Test whether in check (Bool) for check extensions
+#Test whether in check (Bool) for check extensions (or just reference legal_info)
 #Test for check/stale-mate as a seperate function
 
 ###OPTIMISATIONS###
 
 ###REFACTOR###
-#Make views into ally and enemy pieces
-#Put pins inside legal_info
 #Separate move_gen and boardstate/move making into different files
 
 #=
@@ -298,6 +296,7 @@ end
 
 mutable struct Boardstate
     pieces::Vector{UInt64}
+    piece_union::Vector{UInt64}
     Colour::UInt8
     Castle::UInt8
     EnPass::UInt64
@@ -367,6 +366,13 @@ function count_pieces(pieces::AbstractArray{UInt64})
         count += length(BB)
     end
     return count
+end
+
+function pc_unions(pieces)::Vector{UInt64}
+    white_pc_BB = BBunion(pieces[1:6]) 
+    black_pc_BB = BBunion(pieces[7:12]) 
+    all_pc_BB = white_pc_BB | black_pc_BB
+    [white_pc_BB,black_pc_BB,all_pc_BB]
 end
 
 "Helper function when constructing a boardstate"
@@ -490,7 +496,8 @@ function Boardstate(FEN)
                      Vector{UInt64}([Zobrist]))
 
     set_PST!(PSTscore,pieces)
-    Boardstate(pieces,Colour,Castling,EnPassant,Neutral(),PSTscore,Zobrist,MoveHistory,data)
+
+    Boardstate(pieces,pc_unions(pieces),Colour,Castling,EnPassant,Neutral(),PSTscore,Zobrist,MoveHistory,data)
 end
 
 "convert a position from number 0-63 to rank/file notation"
@@ -665,8 +672,9 @@ function attack_info(board::Boardstate)::LegalInfo
     attacker_num = 0
 
     enemy_list = enemy_pieces(board)
-    all_pcs = BBunion(board.pieces)
-    ally_pcs = BBunion(ally_pieces(board))
+    
+    ally_pcs = board.piece_union[ColID(board.Colour)+1]
+    all_pcs = board.piece_union[end]
     KingBB = board.pieces[board.Colour+val(King())]
     position = LSB(KingBB)
     colour::Bool = Whitesmove(board.Colour)
@@ -1022,6 +1030,25 @@ function get_pawn_moves!(movelist,pieceBB,enemy_vec::AbstractArray{UInt64},enemy
     EP_moves!(movelist, attackleft, attackright, pawnMasks.shift,enpassBB,info.checks,all_pcs,enemy_vec,kingpos)
 end
 
+"Iterate through zhash list until last halfmove reset to check for repeated positions"
+function three_repetition(Zhash,Data::BoardData)::Bool
+    count = 1
+    for zhist in Data.ZHashHist[end-1:end-Data.Halfmoves[end]-1]
+        if zhist == Zhash 
+            count += 1
+        end
+        if count > 2
+            return true
+        end
+    end
+    return false
+end
+
+ "implement 50 move rule and 3 position repetition"
+function draw_state(board)::Bool
+    return (board.Data.Halfmoves[end] >= 100) || (count(i->(i==board.ZHash),board.Data.ZHashHist) >= 3)
+end
+
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
 function generate_moves(board::Boardstate,MODE::UInt64=ALLMOVES,legal_info::LegalInfo=attack_info(board))::Vector{UInt32}
     movelist = Vector{UInt32}()
@@ -1031,16 +1058,17 @@ function generate_moves(board::Boardstate,MODE::UInt64=ALLMOVES,legal_info::Lega
     else
         sizehint!(movelist,20)
     end
-
-    #implement 50 move rule and 3 position repetition
-    if (board.Data.Halfmoves[end] >= 100) || (count(i->(i==board.ZHash),board.Data.ZHashHist) >= 3)
+   
+    if draw_state(board)
         board.State = Draw()
     else
 
     ally = ally_pieces(board)
     enemy = enemy_pieces(board)
-    enemy_pcsBB = BBunion(enemy)
-    all_pcsBB = BBunion(board.pieces)
+
+    enemy_pcsBB = board.piece_union[ColID(Opposite(board.Colour))+1] 
+    all_pcsBB = board.piece_union[end]
+
     kingBB = ally[val(King())]
     kingpos = LSB(kingBB)
 
@@ -1090,6 +1118,9 @@ function destroy_piece!(B::Boardstate,colour::UInt8,pieceID,pos)
     B.pieces[CpieceID] = setzero(B.pieces[CpieceID],pos)
     update_PST_score!(B.PSTscore,colour,pieceID,pos,-1)
     B.ZHash ⊻= ZKey_piece(CpieceID,pos)
+
+    unionID = ColID(colour)+1
+    B.piece_union[unionID] = setzero(B.piece_union[unionID],pos)
 end
 
 "utilises setone to create a piece in a position"
@@ -1098,6 +1129,9 @@ function create_piece!(B::Boardstate,colour::UInt8,pieceID,pos)
     B.pieces[CpieceID] = setone(B.pieces[CpieceID],pos)
     update_PST_score!(B.PSTscore,colour,pieceID,pos,+1)
     B.ZHash ⊻= ZKey_piece(CpieceID,pos)
+
+    unionID = ColID(colour)+1
+    B.piece_union[unionID] = setone(B.piece_union[unionID],pos)
 end
 
 "utilises create and destroy to move single piece"
@@ -1235,6 +1269,7 @@ function make_move!(move::UInt32,board::Boardstate)
     swap_player!(board)
     push!(board.MoveHist,move)
     push!(board.Data.ZHashHist,board.ZHash)
+    board.piece_union[end] = board.piece_union[1] | board.piece_union[2]
 
     #check if castling rights have changed
     if board.Castle == board.Data.Castling[end]
@@ -1292,6 +1327,7 @@ function unmake_move!(board::Boardstate)
         #update data struct with halfmoves, en-passant, hash and castling
         pop!(board.Data.ZHashHist)
         board.ZHash = board.Data.ZHashHist[end]
+        board.piece_union[end] = board.piece_union[1] | board.piece_union[2]
 
         if board.Data.Halfmoves[end] > 0 
             board.Data.Halfmoves[end] -= 1

@@ -43,18 +43,18 @@ function load_pieces(renderer)
     filepath = "$(pwd())/ChessPieces/"
     texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
 
-    texture_vec[ColourPieceID(White(),King())] = get_texture(renderer,filepath,"WhiteKing")
-    texture_vec[ColourPieceID(White(),Queen())] = get_texture(renderer,filepath,"WhiteQueen")
-    texture_vec[ColourPieceID(White(),Pawn())] = get_texture(renderer,filepath,"WhitePawn")
-    texture_vec[ColourPieceID(White(),Bishop())] = get_texture(renderer,filepath,"WhiteBishop")
-    texture_vec[ColourPieceID(White(),Knight())] = get_texture(renderer,filepath,"WhiteKnight")
-    texture_vec[ColourPieceID(White(),Rook())] = get_texture(renderer,filepath,"WhiteRook")
-    texture_vec[ColourPieceID(Black(),King())] = get_texture(renderer,filepath,"BlackKing")
-    texture_vec[ColourPieceID(Black(),Queen())] = get_texture(renderer,filepath,"BlackQueen")
-    texture_vec[ColourPieceID(Black(),Pawn())] = get_texture(renderer,filepath,"BlackPawn")
-    texture_vec[ColourPieceID(Black(),Bishop())] = get_texture(renderer,filepath,"BlackBishop")
-    texture_vec[ColourPieceID(Black(),Knight())] = get_texture(renderer,filepath,"BlackKnight")
-    texture_vec[ColourPieceID(Black(),Rook())] = get_texture(renderer,filepath,"BlackRook")
+    texture_vec[ColourPieceID(white,King())] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[ColourPieceID(white,Queen())] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[ColourPieceID(white,Pawn())] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[ColourPieceID(white,Bishop())] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[ColourPieceID(white,Knight())] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[ColourPieceID(white,Rook())] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[ColourPieceID(black,King())] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[ColourPieceID(black,Queen())] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[ColourPieceID(black,Pawn())] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[ColourPieceID(black,Bishop())] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[ColourPieceID(black,Knight())] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[ColourPieceID(black,Rook())] = get_texture(renderer,filepath,"BlackRook")
 
     return texture_vec
 end
@@ -329,7 +329,7 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 1 1"
+    FEN = "Q6r/8/2K5/8/8/8/8/b2k3 w - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
@@ -339,7 +339,7 @@ function main()
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
     bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
-    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN,true)
+    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN)
 
 end
 main()
