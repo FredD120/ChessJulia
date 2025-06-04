@@ -121,8 +121,7 @@ test_movfromloc()
 function test_legalinfo()
     simpleFEN = "K7/R7/8/8/8/8/8/r6q w - - 0 1"
     board = Boardstate(simpleFEN)    
-    all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
+    info = logic.attack_info(board)
 
     @assert info.checks == (UInt64(1)<<63) "only bishop attacks king"
     @assert info.attack_num == 1
@@ -130,47 +129,30 @@ function test_legalinfo()
 
     simpleFEN = "K7/7R/8/8/8/8/8/qq6 w - - 0 1"
     board = Boardstate(simpleFEN)    
-    all_pcs = logic.BBunion(board.pieces)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,0,1,true)
     @assert length(info.blocks) == 6 "6 squares blocking queen attack"
 
     simpleFEN = "4k3/8/8/8/4q3/8/4B3/1Q2K3 w - 0 1"
     board = Boardstate(simpleFEN)  
-    all_pcs = logic.BBunion(board.pieces)
-    kingBB = logic.ally_pieces(board)[val(King())]
-    kingpos = LSB(kingBB)
-    info = logic.attack_info(logic.enemy_pieces(board),all_pcs,kingpos,kingBB,true)
+    info = logic.attack_info(board)
 
     @assert info.blocks == typemax(UInt64)
     @assert info.checks == typemax(UInt64)
-end
-test_legalinfo()
 
-function testpins()
     simpleFEN = "K7/R7/8/8/8/8/8/r6b w - - 0 1"
     board = Boardstate(simpleFEN)    
-    all_pcs = logic.BBunion(board.pieces)
-    ally_pcs = logic.BBunion(logic.ally_pieces(board))
-    enemy = logic.enemy_pieces(board)
+    pinfo = logic.attack_info(board)
 
-    rookpins,bishoppins = logic.detect_pins(0,enemy,all_pcs,ally_pcs)
-
-    @assert length(rookpins) == 7
-    @assert bishoppins == 0
+    @assert length(pinfo.rookpins) == 7
+    @assert pinfo.bishoppins == 0
 
     simpleFEN = "4k3/8/8/8/4b3/8/4B3/1Q2K3 w - 0 1"
     board = Boardstate(simpleFEN)    
-    all_pcs = logic.BBunion(board.pieces)
-    ally_pcs = logic.BBunion(logic.ally_pieces(board))
-    enemy = logic.enemy_pieces(board)
-    kingBB = logic.ally_pieces(board)[val(King())]
-    kingpos = LSB(kingBB)
+    pinfo = logic.attack_info(board)
 
-    rookpins,bishoppins = logic.detect_pins(kingpos,enemy,all_pcs,ally_pcs)
-    @assert rookpins == 0
-    @assert bishoppins == 0
+    @assert pinfo.rookpins == 0
+    @assert pinfo.bishoppins == 0
 end
-testpins()
+test_legalinfo()
 
 function test_castle()
     cFEN = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"
@@ -633,6 +615,9 @@ test_Zobrist()
 
 function Testing_perft(board::Boardstate,depth)
     moves = generate_moves(board)
+    correct_state = board.State
+    gameover!(board)
+    @assert board.State == correct_state 
     attacks = generate_attacks(board)
     num_attacks = count(m->cap_type(m)>0,moves)
 
