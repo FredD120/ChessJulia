@@ -567,7 +567,6 @@ function test_sliding()
         end
     end
     newmoves = generate_moves(board)
-    println(newmoves)
     @assert length(newmoves) == 12
     @assert count(i->(cap_type(i) == val(Queen())),newmoves) == 1
 end
@@ -616,6 +615,9 @@ test_Zobrist()
 
 function Testing_perft(board::Boardstate,depth)
     moves = generate_moves(board)
+    correct_state = board.State
+    gameover!(board)
+    @assert board.State == correct_state 
     attacks = generate_attacks(board)
     num_attacks = count(m->cap_type(m)>0,moves)
 
