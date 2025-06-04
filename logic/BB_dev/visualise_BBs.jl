@@ -41,18 +41,18 @@ function load_pieces(renderer)
     filepath = "$(pwd())/ChessPieces/"
     texture_vec = Vector{Ptr{SDL_Texture}}(undef,12)
 
-    texture_vec[val(King())+White] = get_texture(renderer,filepath,"WhiteKing")
-    texture_vec[val(Queen())+White] = get_texture(renderer,filepath,"WhiteQueen")
-    texture_vec[val(Pawn())+White] = get_texture(renderer,filepath,"WhitePawn")
-    texture_vec[val(Bishop())+White] = get_texture(renderer,filepath,"WhiteBishop")
-    texture_vec[val(Knight())+White] = get_texture(renderer,filepath,"WhiteKnight")
-    texture_vec[val(Rook())+White] = get_texture(renderer,filepath,"WhiteRook")
-    texture_vec[val(King())+Black] = get_texture(renderer,filepath,"BlackKing")
-    texture_vec[val(Queen())+Black] = get_texture(renderer,filepath,"BlackQueen")
-    texture_vec[val(Pawn())+Black] = get_texture(renderer,filepath,"BlackPawn")
-    texture_vec[val(Bishop())+Black] = get_texture(renderer,filepath,"BlackBishop")
-    texture_vec[val(Knight())+Black] = get_texture(renderer,filepath,"BlackKnight")
-    texture_vec[val(Rook())+Black] = get_texture(renderer,filepath,"BlackRook")
+    texture_vec[ColourPieceID(white,King())] = get_texture(renderer,filepath,"WhiteKing")
+    texture_vec[ColourPieceID(white,Queen())] = get_texture(renderer,filepath,"WhiteQueen")
+    texture_vec[ColourPieceID(white,Pawn())] = get_texture(renderer,filepath,"WhitePawn")
+    texture_vec[ColourPieceID(white,Bishop())] = get_texture(renderer,filepath,"WhiteBishop")
+    texture_vec[ColourPieceID(white,Knight())] = get_texture(renderer,filepath,"WhiteKnight")
+    texture_vec[ColourPieceID(white,Rook())] = get_texture(renderer,filepath,"WhiteRook")
+    texture_vec[ColourPieceID(black,King())] = get_texture(renderer,filepath,"BlackKing")
+    texture_vec[ColourPieceID(black,Queen())] = get_texture(renderer,filepath,"BlackQueen")
+    texture_vec[ColourPieceID(black,Pawn())] = get_texture(renderer,filepath,"BlackPawn")
+    texture_vec[ColourPieceID(black,Bishop())] = get_texture(renderer,filepath,"BlackBishop")
+    texture_vec[ColourPieceID(black,Knight())] = get_texture(renderer,filepath,"BlackKnight")
+    texture_vec[ColourPieceID(black,Rook())] = get_texture(renderer,filepath,"BlackRook")
 
     return texture_vec
 end
@@ -175,19 +175,16 @@ function mouse_clicked!(mouse_pos,highlight_pieces,GUIboard,PLACE_PIECES)
         pawn_left = (pawn_push >> 1) & lshift_mask
         pawn_right = (pawn_push << 1) & rshift_mask
 
-        GUIboard .= UInt8[0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-        #GUIboard .= get_GUI_moves(UInt64(0xFF),val(Bishop()))
-        #GUIboard .= set_GUI(GUIboard,pawn_push,val(Pawn()))
+        GUIboard .= [0x09, 0x00, 0x00, 0x08, 0x07, 0x00, 0x00, 0x09, 0x0c, 0x00, 0x0c, 0x0c, 0x00, 0x02, 0x0a, 0x00, 0x0a, 0x0b, 0x00, 0x00, 0x0c, 0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x06, 0x05, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x0c, 0x06, 0x06, 0x06, 0x04, 0x04, 0x06, 0x06, 0x06, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x03] #GUIboard .= set_GUI(GUIboard,pawn_push,val(Pawn()))
         #GUIboard .= set_GUI(GUIboard,pawn_left,val(Bishop()))
         #GUIboard .= set_GUI(GUIboard,pawn_right,val(Rook()))
 
-        #= Display rook and bishop moves using magic BBs 
-        blockers = array_to_BB(highlight_pieces) 
-        move_BB = logic.sliding_attacks(logic.BishopMagics[mouse_pos+1],blockers)
+         #Display rook and bishop moves using magic BBs 
+        #blockers = array_to_BB(highlight_pieces) 
+        #move_BB = logic.sliding_attacks(logic.BishopMagics[mouse_pos+1],blockers)
 
-        GUIboard .= get_GUI_moves(move_BB,logic.Bishop)
-        =#
+        #GUIboard .= get_GUI_moves(514,val(logic.Bishop()))
+        
     end
 end
 

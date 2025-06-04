@@ -615,12 +615,13 @@ test_Zobrist()
 
 function Testing_perft(board::Boardstate,depth)
     moves = generate_moves(board)
+
     correct_state = board.State
     gameover!(board)
-    @assert board.State == correct_state 
+    @assert board.State == correct_state "Correct: $correct_state. Incorrect: $(board.State)."
+    
     attacks = generate_attacks(board)
     num_attacks = count(m->cap_type(m)>0,moves)
-
     @assert length(attacks) == num_attacks "Wrong number of attacks generated. Should be $(num_attacks), got $(length(attacks))."
 
     if depth > 1
@@ -638,6 +639,7 @@ end
 function test_with_perft()
     #Test that PST values from incremental upadate are not different from static evaluation
     #Also that number of attacks from generate_attacks is the same as from generate_moves(all)
+    #Also that we can identify terminal nodes without running movegen
 
     FEN = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
     board = Boardstate(FEN)
@@ -645,7 +647,11 @@ function test_with_perft()
 
     FEN = "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1"
     board = Boardstate(FEN)
-    Testing_perft(board,4)
+    Testing_perft(board,5)
+
+    FEN = "RPrk/PP6/8/8/8/8/r7/7K b - - 0 26"
+    board = Boardstate(FEN)
+    Testing_perft(board,5)
 end
 
 function test_PSTeval()
@@ -712,7 +718,7 @@ function benchmarkspeed(leafcount)
 end
 
 if expensive
-    test_with_perft()
+    @time test_with_perft()
     leaves,Δt = test_speed()
     println("Leaves: $leaves. NPS = $(leaves/Δt) nodes/second")
 
