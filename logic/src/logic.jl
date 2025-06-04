@@ -828,23 +828,23 @@ function get_queen_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_p
 end
 
 "Returns true if any queen moves exist"
-function any_queen_moves(pieceBB,all_pcs,info::LegalInfo)::Bool
+function any_queen_moves(pieceBB,all_pcs,ally_pcsBB,info::LegalInfo)::Bool
     unpinnedBB = pieceBB & ~(info.rookpins | info.bishoppins)
     RpinnedBB = pinned_rook(pieceBB,info.rookpins)
     BpinnedBB = pinned_bishop(pieceBB,info.bishoppins)
 
     for loc in unpinnedBB
-        if legal_queen_moves(loc,all_pcs,typemax(UInt64),typemax(UInt64),info) > 0
+        if (legal_queen_moves(loc,all_pcs,typemax(UInt64),typemax(UInt64),info) & ~ally_pcsBB) > 0
             return true
         end
     end
     for loc in RpinnedBB
-        if legal_rook_moves(loc,all_pcs,info.rookpins,info) > 0
+        if (legal_rook_moves(loc,all_pcs,info.rookpins,info) & ~ally_pcsBB) > 0
             return true
         end
     end
     for loc in BpinnedBB
-        if legal_bishop_moves(loc,all_pcs,info.bishoppins,info) > 0
+        if (legal_bishop_moves(loc,all_pcs,info.bishoppins,info) & ~ally_pcsBB) > 0
             return true
         end
     end
@@ -869,12 +869,12 @@ function get_rook_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_pc
 end
 
 "Returns true if any rook moves exist"
-function any_rook_moves(pieceBB,all_pcs,info::LegalInfo)::Bool
+function any_rook_moves(pieceBB,all_pcs,ally_pcsBB,info::LegalInfo)::Bool
     unpinnedBB = pieceBB & ~(info.rookpins | info.bishoppins)
     pinnedBB = pinned_rook(pieceBB,info.rookpins)
       for (BB,rpins) in zip([pinnedBB,unpinnedBB],[info.rookpins,typemax(UInt64)])
         for loc in BB
-            if legal_rook_moves(loc,all_pcs,rpins,info) > 0
+            if (legal_rook_moves(loc,all_pcs,rpins,info) & ~ally_pcsBB) > 0
                 return true
             end
         end
@@ -900,12 +900,12 @@ function get_bishop_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_
 end
 
 "Returns true if any bishop moves exist"
-function any_bishop_moves(pieceBB,all_pcs,info::LegalInfo)::Bool
+function any_bishop_moves(pieceBB,all_pcs,ally_pcsBB,info::LegalInfo)::Bool
     unpinnedBB = pieceBB & ~(info.rookpins | info.bishoppins)
     pinnedBB = pinned_bishop(pieceBB,info.bishoppins)
     for (BB,bpins) in zip([pinnedBB,unpinnedBB],[info.bishoppins,typemax(UInt64)])
         for loc in BB
-            if legal_bishop_moves(loc,all_pcs,bpins,info) > 0
+            if (legal_bishop_moves(loc,all_pcs,bpins,info) & ~ally_pcsBB) > 0
                 return true
             end
         end
@@ -927,10 +927,10 @@ function get_knight_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_
 end
 
 "Returns true if any knight moves exist"
-function any_knight_moves(pieceBB,info::LegalInfo)::Bool
+function any_knight_moves(pieceBB,ally_pcsBB,info::LegalInfo)::Bool
     unpinnedBB = pieceBB & ~(info.rookpins | info.bishoppins)
     for loc in unpinnedBB
-        if legal_knight_moves(loc,info) > 0
+        if (legal_knight_moves(loc,info) & ~ally_pcsBB) > 0
             return true
         end
     end
@@ -963,8 +963,8 @@ function get_king_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_pc
 end
 
 "Returns true if any king moves exist. Don't need to check castles as castle is only legal if sideways moves are"
-function any_king_moves(kingpos,info::LegalInfo)::Bool
-    if legal_king_moves(kingpos,info) > 0
+function any_king_moves(kingpos,ally_pcsBB,info::LegalInfo)::Bool
+    if (legal_king_moves(kingpos,info) & ~ally_pcsBB) > 0
         return true
     else
         return false
@@ -1103,11 +1103,11 @@ function get_pawn_moves!(movelist,pieceBB,enemy_vec::AbstractArray{UInt64},enemy
 end
 
 "Return true if any pawn moves exist"
-function any_pawn_moves(pieceBB,all_pcs,colour::Bool,info::LegalInfo)::Bool
+function any_pawn_moves(pieceBB,all_pcs,ally_pcsBB,colour::Bool,info::LegalInfo)::Bool
     #split into pinned and unpinned pieces, then run movegetter seperately on each
     unpinnedBB = pieceBB & ~(info.rookpins | info.bishoppins)
-    RpinnedBB = pinned(Rook(),pieceBB,info.rookpins)
-    BpinnedBB = pinned(Bishop(),pieceBB,info.bishoppins)
+    RpinnedBB = pinned_rook(pieceBB,info.rookpins)
+    BpinnedBB = pinned_bishop(pieceBB,info.bishoppins)
 
     #push once and remove any that are blocked
     pushpawn1 = cond_push(colour,unpinnedBB)
@@ -1115,7 +1115,7 @@ function any_pawn_moves(pieceBB,all_pcs,colour::Bool,info::LegalInfo)::Bool
     pushpinned = cond_push(colour,RpinnedBB)
     legalpush1 |= quiet_moves(pushpinned,all_pcs) & info.rookpins
 
-    if legalpush1 > 0
+    if (legalpush1 & info.blocks) > 0
         return true
     end
 
@@ -1131,7 +1131,7 @@ function any_pawn_moves(pieceBB,all_pcs,colour::Bool,info::LegalInfo)::Bool
     attackleft |= Battackleft & info.bishoppins
     attackright |= Battackright & info.bishoppins
 
-    if attackleft > 0 || attack_right > 0
+    if ((attackleft & ~ally_pcsBB) & (info.checks | info.blocks)) > 0 || ((attackright & ~ally_pcsBB) & (info.checks | info.blocks)) > 0
         return true
     end
     return false
@@ -1220,28 +1220,30 @@ function generate_attacks(board::Boardstate)::Vector{UInt32}
 end
 
 "evaluates whether in check and whether there are any legal moves"
-function gameover!(board::Boardstate)::GameState
+function gameover!(board::Boardstate)
     info = attack_info(board)
 
-    ally = ally_pieces(board)
     all_pcsBB = board.piece_union[end]
+    ally_pcsBB = board.piece_union[ColID(board.Colour)+1] 
 
-    kingBB = ally[val(King())]
+    kingBB = board.pieces[board.Colour+val(King())]
     kingpos = LSB(kingBB)
 
-    if any_king_moves(kingpos,info) ||
-       any_pawn_moves(board.pieces[board.Colour+val(Pawn())],all_pcsBB,Whitesmove(board.Colour),info) ||
-       any_knight_moves(board.pieces[board.Colour+val(Knight())],info) ||
-       any_bishop_moves(board.pieces[board.Colour+val(Bishop())],all_pcsBB,info) ||
-       any_rook_moves(board.pieces[board.Colour+val(Rook())],all_pcsBB,info) ||
-       any_queen_moves(board.pieces[board.Colour+val(Queen())],all_pcsBB,info)
+    if any_king_moves(kingpos,ally_pcsBB,info) 
+        board.State = Neutral()
+    elseif info.attack_num <= 1 && (
+            any_pawn_moves(board.pieces[board.Colour+val(Pawn())],all_pcsBB,ally_pcsBB,Whitesmove(board.Colour),info) ||
+            any_knight_moves(board.pieces[board.Colour+val(Knight())],ally_pcsBB,info) ||
+            any_bishop_moves(board.pieces[board.Colour+val(Bishop())],all_pcsBB,ally_pcsBB,info) ||
+            any_rook_moves(board.pieces[board.Colour+val(Rook())],all_pcsBB,ally_pcsBB,info) ||
+            any_queen_moves(board.pieces[board.Colour+val(Queen())],all_pcsBB,ally_pcsBB,info))
+        board.State = Neutral() 
+    else
         if info.attack_num > 0
             board.State = Loss()
         else
             board.State = Draw()
         end
-    else
-        board.State = Neutral()
     end
 end
 
