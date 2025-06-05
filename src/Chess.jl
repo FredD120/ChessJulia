@@ -1,7 +1,7 @@
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 using logic
-import RevisionistV02 as bot
+import RevisionistV03 as bot
 #using libpng_jll
 
 "initialise window and renderer in SDL"
@@ -202,6 +202,7 @@ end
 
 "Prints the winner and returns true if game is over"
 function check_win(logicstate::Boardstate)
+    gameover!(logicstate)
     if logicstate.State != Neutral()
         if logicstate.State == Draw()
             println("Game over: Draw")
@@ -221,7 +222,9 @@ function GUImove!(move,board,vsBOT)
     make_move!(move,board)
     moves = generate_moves(board)
     if vsBOT && !check_win(board)
-        botmove = bot.best_move(board,moves,UInt8(4),true)
+        #botmove = bot.best_move(board,moves,UInt8(4),true) #test bot version?
+
+        botmove = bot.best_move(board,0.5)
         make_move!(botmove,board)
     end
 end
@@ -329,7 +332,7 @@ end
 
 function main()
     #SDL_Quit()
-    FEN = "Q6r/8/2K5/8/8/8/8/b2k3 w - 0 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
@@ -339,7 +342,7 @@ function main()
     pieces = load_pieces(renderer)
     board = colour_surface(chessboard,renderer,WIDTH,sq_width,brown,cream)
     bclk_sq,cclk_sq = click_sqs(renderer,sq_width,brown,cream)
-    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN)
+    main_loop(win,renderer,pieces,board,[bclk_sq,cclk_sq],WIDTH,sq_width,FEN,true)
 
 end
 main()
