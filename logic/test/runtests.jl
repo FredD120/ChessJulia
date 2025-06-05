@@ -62,6 +62,17 @@ function test_BitboardUnion()
 end
 test_BitboardUnion()
 
+function test_index()
+    pos = 17
+    @assert rank(pos) == 5
+    @assert file(pos) == 1
+
+    bpos = side_index(black,pos)
+    @assert rank(bpos) == 2 "Mirrored about the x axis"
+    @assert file(bpos) == 1
+end
+test_index()
+
 function test_Move()
     pc = UInt8(1)
     from = UInt8(10)
@@ -314,15 +325,35 @@ function test_movegetters()
     end
     @assert attks == 1
     @assert quiets == 5
+end
+test_movegetters()
 
+function test_gameover()
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w - - 0 1"
     board = Boardstate(simpleFEN)
     board.Data.Halfmoves[end] = 100
-    moves = generate_moves(board)
-    @assert length(moves) == 0
+    gameover!(board)
     @assert board.State == Draw()
+
+    #WKing stalemated in corner
+    slidingFEN = "K7/7r/8/8/8/8/8/1r4k1 w - 0 1"
+    board = Boardstate(slidingFEN)
+    gameover!(board)
+    @assert board.State == Draw() "White king not stalemated"
+
+    #WKing checkmated by queen and 2 rooks, unless bishop blocks
+    slidingFEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
+    board = Boardstate(slidingFEN)
+    gameover!(board)
+    @assert board.State == Neutral() "King moves backwards into check?"
+
+    #Wking is checkmated as bishop cannot capture rook because pinned by queen
+    slidingFEN = "K5Nr/8/8/3B4/8/8/r7/1r5q w - 0 1"
+    board = Boardstate(slidingFEN)
+    gameover!(board)
+    @assert board.State == Loss() "White bishop cannot block"
 end
-test_movegetters()
+test_gameover()
 
 function test_makemove()
     #Test making a move with only one piece on the board
@@ -430,14 +461,12 @@ function test_legal()
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
     @assert length(moves) == 0 "White king not stalemated"
-    @assert board.State == Draw()
 
     #WKing checkmated by queen and 2 rooks, unless bishop blocks
     slidingFEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
     @assert length(moves) == 1 "King moves backwards into check?"
-    @assert board.State == Neutral()
     @assert pc_type(moves[1]) == val(Bishop())
 
     #Wking is checkmated as bishop cannot capture rook because pinned by queen
@@ -445,7 +474,6 @@ function test_legal()
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
     @assert length(moves) == 0 "White bishop cannot block"
-    @assert board.State == Loss()
 
     #Only legal move is to block with rook
     slidingFEN = "K5Nr/8/8/3B4/7R/8/q7/1r5q w - 0 1"
@@ -535,8 +563,7 @@ function test_repetition()
             end
         end
     end
-    #need to generate moves to figure out if it is a draw
-    generate_moves(board)
+    gameover!(board)
     @assert board.State == Draw()
 end
 test_repetition()
@@ -614,11 +641,14 @@ end
 test_Zobrist()
 
 function Testing_perft(board::Boardstate,depth)
+    gameover!(board)
     moves = generate_moves(board)
 
-    correct_state = board.State
-    gameover!(board)
-    @assert board.State == correct_state "Correct: $correct_state. Incorrect: $(board.State)."
+    if board.State == Neutral()
+        @assert length(moves) > 0 "Missed gameover state"
+    else
+        @assert length(moves) == 0 "Incorrectly identified gameover state"
+    end
     
     attacks = generate_attacks(board)
     num_attacks = count(m->cap_type(m)>0,moves)

@@ -59,9 +59,8 @@ end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
 function minimax(board,player,α,β,depth,logger)
-    t = time()
-    moves = generate_moves(board)
-    logger.movegentime += time() - t
+    #Evaluate whether we are in a terminal node
+    gameover!(board)
     if board.State != Neutral()
         logger.terminal += 1
         t = time()
@@ -75,7 +74,11 @@ function minimax(board,player,α,β,depth,logger)
         value = evaluate(board)
         logger.evaltime += time() - t
         return player * value
+        
     else
+        t = time()
+        moves = generate_moves(board)
+        logger.movegentime += time() - t
         for move in moves
             make_move!(move,board)
             score = -minimax(board,-player,-β,-α,depth-1,logger)

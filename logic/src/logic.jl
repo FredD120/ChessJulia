@@ -1166,10 +1166,6 @@ function generate_moves(board::Boardstate,MODE::UInt64=ALLMOVES,legal_info::Lega
         sizehint!(movelist,20)
     end
    
-    if draw_state(board)
-        board.State = Draw()
-    else
-
     ally = ally_pieces(board)
     enemy = enemy_pieces(board)
 
@@ -1200,16 +1196,6 @@ function generate_moves(board::Boardstate,MODE::UInt64=ALLMOVES,legal_info::Lega
         get_pawn_moves!(movelist,ally[val(Pawn())],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
         Whitesmove(board.Colour),kingpos,MODE,legal_info)
     end
-
-    #can't conclude whether game is over unless we try to generate all moves
-    if length(movelist) == 0 && MODE == ALLMOVES
-        if legal_info.attack_num > 0
-            board.State = Loss()
-        else
-            board.State = Draw()
-        end
-    end
-    end
     return movelist
 end
 
@@ -1219,30 +1205,33 @@ function generate_attacks(board::Boardstate)::Vector{UInt32}
     return generate_moves(board,MODE)
 end
 
-"evaluates whether in check and whether there are any legal moves"
+"evaluates whether we are in a terminal node due to draw conditions, or check/stale-mates"
 function gameover!(board::Boardstate)
     info = attack_info(board)
-
-    all_pcsBB = board.piece_union[end]
-    ally_pcsBB = board.piece_union[ColID(board.Colour)+1] 
-
-    kingBB = board.pieces[board.Colour+val(King())]
-    kingpos = LSB(kingBB)
-
-    if any_king_moves(kingpos,ally_pcsBB,info) 
-        board.State = Neutral()
-    elseif info.attack_num <= 1 && (
-            any_pawn_moves(board.pieces[board.Colour+val(Pawn())],all_pcsBB,ally_pcsBB,Whitesmove(board.Colour),info) ||
-            any_knight_moves(board.pieces[board.Colour+val(Knight())],ally_pcsBB,info) ||
-            any_bishop_moves(board.pieces[board.Colour+val(Bishop())],all_pcsBB,ally_pcsBB,info) ||
-            any_rook_moves(board.pieces[board.Colour+val(Rook())],all_pcsBB,ally_pcsBB,info) ||
-            any_queen_moves(board.pieces[board.Colour+val(Queen())],all_pcsBB,ally_pcsBB,info))
-        board.State = Neutral() 
+    if draw_state(board)
+        board.State = Draw()
     else
-        if info.attack_num > 0
-            board.State = Loss()
+        all_pcsBB = board.piece_union[end]
+        ally_pcsBB = board.piece_union[ColID(board.Colour)+1] 
+
+        kingBB = board.pieces[board.Colour+val(King())]
+        kingpos = LSB(kingBB)
+
+        if any_king_moves(kingpos,ally_pcsBB,info) 
+            board.State = Neutral()
+        elseif info.attack_num <= 1 && (
+                any_pawn_moves(board.pieces[board.Colour+val(Pawn())],all_pcsBB,ally_pcsBB,Whitesmove(board.Colour),info) ||
+                any_knight_moves(board.pieces[board.Colour+val(Knight())],ally_pcsBB,info) ||
+                any_bishop_moves(board.pieces[board.Colour+val(Bishop())],all_pcsBB,ally_pcsBB,info) ||
+                any_rook_moves(board.pieces[board.Colour+val(Rook())],all_pcsBB,ally_pcsBB,info) ||
+                any_queen_moves(board.pieces[board.Colour+val(Queen())],all_pcsBB,ally_pcsBB,info))
+            board.State = Neutral() 
         else
-            board.State = Draw()
+            if info.attack_num > 0
+                board.State = Loss()
+            else
+                board.State = Draw()
+            end
         end
     end
 end
