@@ -1,7 +1,7 @@
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 using logic
-import RevisionistV03 as bot
+import RevisionistV03_01 as bot
 #using libpng_jll
 
 "initialise window and renderer in SDL"
@@ -224,7 +224,7 @@ function GUImove!(move,board,vsBOT)
     if vsBOT && !check_win(board)
         #botmove = bot.best_move(board,moves,UInt8(4),true) #test bot version?
 
-        botmove = bot.best_move(board,0.5)
+        botmove = bot.best_move(board,0.1,true)
         make_move!(botmove,board)
     end
 end
@@ -237,7 +237,7 @@ function main_loop(win,renderer,tex_vec,board,click_sqs,WIDTH,square_width,FEN,v
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     promoting = false
-    UNMAKE = true         #allow unmaking moves (not allowed vs engine)
+    UNMAKE = true           #allow unmaking moves
     try
         close = false
         while !close

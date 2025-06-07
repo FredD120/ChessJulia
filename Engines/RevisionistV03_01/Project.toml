@@ -1,6 +1,6 @@
-name = "RevisionistV03"
-uuid = "3ba3440e-0551-40af-bd9f-ce36b41a2b46"
-version = "0.3.0"
+name = "RevisionistV03_01"
+uuid = "301a440e-0551-40af-bd9f-ce36b41a2b46"
+version = "0.3.1"
 
 [deps]
 Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
