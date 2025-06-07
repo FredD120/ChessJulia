@@ -332,25 +332,25 @@ function test_gameover()
     simpleFEN = "8/8/4nK2/8/8/8/8/8 w - - 0 1"
     board = Boardstate(simpleFEN)
     board.Data.Halfmoves[end] = 100
-    gameover!(board)
+    legal = gameover!(board)
     @assert board.State == Draw()
 
     #WKing stalemated in corner
     slidingFEN = "K7/7r/8/8/8/8/8/1r4k1 w - 0 1"
     board = Boardstate(slidingFEN)
-    gameover!(board)
+    legal = gameover!(board)
     @assert board.State == Draw() "White king not stalemated"
 
     #WKing checkmated by queen and 2 rooks, unless bishop blocks
     slidingFEN = "1R4B1/RK6/7r/8/8/8/8/r1r3kq w - 0 1"
     board = Boardstate(slidingFEN)
-    gameover!(board)
+    legal = gameover!(board)
     @assert board.State == Neutral() "King moves backwards into check?"
 
     #Wking is checkmated as bishop cannot capture rook because pinned by queen
     slidingFEN = "K5Nr/8/8/3B4/8/8/r7/1r5q w - 0 1"
     board = Boardstate(slidingFEN)
-    gameover!(board)
+    legal = gameover!(board)
     @assert board.State == Loss() "White bishop cannot block"
 end
 test_gameover()
@@ -563,7 +563,7 @@ function test_repetition()
             end
         end
     end
-    gameover!(board)
+    legal = gameover!(board)
     @assert board.State == Draw()
 end
 test_repetition()
@@ -641,8 +641,8 @@ end
 test_Zobrist()
 
 function Testing_perft(board::Boardstate,depth)
-    gameover!(board)
-    moves = generate_moves(board)
+    legal = gameover!(board)
+    moves = generate_moves(board,legal)
 
     if board.State == Neutral()
         @assert length(moves) > 0 "Missed gameover state"

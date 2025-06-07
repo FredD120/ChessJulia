@@ -60,7 +60,7 @@ end
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
 function minimax(board,player,α,β,depth,logger)
     #Evaluate whether we are in a terminal node
-    gameover!(board)
+    legal_info = gameover!(board)
     if board.State != Neutral()
         logger.terminal += 1
         t = time()
@@ -77,7 +77,7 @@ function minimax(board,player,α,β,depth,logger)
         
     else
         t = time()
-        moves = generate_moves(board)
+        moves = generate_moves(board,legal_info)
         logger.movegentime += time() - t
         for move in moves
             make_move!(move,board)

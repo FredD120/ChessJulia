@@ -1157,7 +1157,7 @@ function draw_state(board)::Bool
 end
 
 "get lists of pieces and piece types, find locations of owned pieces and create a movelist of all legal moves"
-function generate_moves(board::Boardstate,MODE::UInt64=ALLMOVES,legal_info::LegalInfo=attack_info(board))::Vector{UInt32}
+function generate_moves(board::Boardstate,legal_info::LegalInfo=attack_info(board),MODE::UInt64=ALLMOVES)::Vector{UInt32}
     movelist = Vector{UInt32}()
 
     if MODE == ALLMOVES
@@ -1200,9 +1200,9 @@ function generate_moves(board::Boardstate,MODE::UInt64=ALLMOVES,legal_info::Lega
 end
 
 "helper function that used generate moves create a movelist of all attacking moves (no quiets)"
-function generate_attacks(board::Boardstate)::Vector{UInt32}
+function generate_attacks(board::Boardstate,legal_info::LegalInfo=attack_info(board))::Vector{UInt32}
     MODE = ATTACKONLY
-    return generate_moves(board,MODE)
+    return generate_moves(board,legal_info,MODE)
 end
 
 "evaluates whether we are in a terminal node due to draw conditions, or check/stale-mates"
@@ -1234,6 +1234,7 @@ function gameover!(board::Boardstate)
             end
         end
     end
+    return info
 end
 
 "utilises setzero to remove a piece from a position"

@@ -1,12 +1,12 @@
-module RevisionistV03_01
+module RevisionistV03_02
 
 #=
 INHERIT
 -> Evaluate positions based on piece value and piece square tables
 -> Minimax with alpha beta pruning tree search
+-> Iterative deepening
 
 NEW
--> Iterative deepening
 -> Quiescence search
 -> Check extension
 -> Move ordering: 
@@ -47,16 +47,11 @@ mutable struct Logger
     pos_eval::Int32
     terminal::Int32
     branches_cut::Dict{UInt8,UInt64}
-    evalδt::Float64
-    movegenδt::Float64
-    moveorderδt::Float64
-    makeδt::Float64
-    terminalδt::Float64
     cur_depth::UInt8
     stopmidsearch::Bool
 end
 
-Logger() = Logger(0,0,0,Dict{UInt8,UInt64}(),0,0,0,0,0,0,false)
+Logger() = Logger(0,0,0,Dict{UInt8,UInt64}(),0,false)
 
 "Make dictionary of branch cuts more readable"
 function unpack(D::Dict{UInt8,UInt64})
@@ -65,27 +60,6 @@ function unpack(D::Dict{UInt8,UInt64})
         vec[key] = val
     end
     vec
-end
-
-"Macro to construct timing calls that log time spent in functions"
-macro log_time(logger_field_expr, code_expr)
-    # Generate unique variable names to avoid clashes
-    t_start = gensym(:t_start)
-    result = gensym(:result)
-    logger = gensym(:logger_var)
-
-    logger_var_expr = logger_field_expr.args[1] 
-    field_name_expr = logger_field_expr.args[2] 
-
-    quote
-        $(logger) = $(esc(logger_var_expr))
-
-        $(t_start) = time()
-        $(result) = $(esc(code_expr)) # Evaluate the expression being timed
-        current_time = getproperty($(logger), $(esc(field_name_expr)))
-        setproperty!($(logger), $(esc(field_name_expr)), current_time + (time() - $(t_start)))
-        $(result) # Return the result of the expression
-    end
 end
 
 "Constant evaluation of stalemate"
@@ -151,30 +125,24 @@ function minimax(board,player,α,β,depth,info::SearchInfo,logger::Logger)
     end
 
     #Evaluate whether we are in a terminal node
-    legal_info = @log_time logger.terminalδt gameover!(board)
+    legal_info = gameover!(board)
     if board.State != Neutral()
         logger.terminal += 1
-        value = @log_time logger.evalδt eval(board.State,depth)
+        value = eval(board.State,depth)
         return value
 
     elseif depth <= MINDEPTH
         logger.pos_eval += 1
-        value = @log_time logger.evalδt evaluate(board)
+        value = evaluate(board)
         return player * value
         
     else
-        moves = @log_time logger.movegenδt generate_moves(board,legal_info)
+        moves = generate_moves(board,legal_info)
         for move in moves
-            t = time()
             make_move!(move,board)
-            logger.makeδt += time() - t
-
             info.ply += 1
             score = -minimax(board,-player,-β,-α,depth-1,info,logger)
-
-            t = time()
             unmake_move!(board)
-            logger.makeδt += time() - t
             info.ply -= 1
 
             #update alpha when better score is found
@@ -199,8 +167,8 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     player = sgn(board.Colour)
 
     #root node is always on PV
-    scores = @log_time logger.moveorderδt score_moves(moves,info.best_mv,true)
-    moves = @log_time logger.moveorderδt sort_moves(moves,scores)
+    scores = score_moves(moves,info.best_mv,true)
+    moves = sort_moves(moves,scores)
     
     for move in moves
         make_move!(move,board)
@@ -269,8 +237,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
             println("Ran out of time mid search.")
         end
 
-        println("Time: $(round(δt,sigdigits=4))s. Evaluation: $(Int(round(100*logger.evalδt/δt)))%. Movegen: $(Int(round(100*logger.movegenδt/δt)))%. Move ordering: $(Int(round(100*logger.moveorderδt/δt)))%. Make/Unmake: $(Int(round(100*logger.makeδt/δt)))%. Gameover: $(Int(round(100*logger.terminalδt/δt)))%.")
-        println("Reached $(logger.terminal) terminal nodes. Branch cuts: $(unpack(logger.branches_cut)).")
+        println("Time taken: $(round(δt,sigdigits=4))s. Reached $(logger.terminal) terminal nodes. Branch cuts: $(unpack(logger.branches_cut)).")
         println("################################################################################################################")
     end
     return best_move,logger
