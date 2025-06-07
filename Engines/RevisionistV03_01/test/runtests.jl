@@ -4,7 +4,7 @@ using Profile
 
 const benchmark = true
 const profil = false
-const MAXTIME = 0.1
+const MAXTIME = 0.05
 
 function test_eval()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -66,6 +66,19 @@ function test_positional()
 end
 test_positional()
 
+function test_ordering()
+    FEN = "K7/R7/R7/8/8/8/8/7k w - - 0 1"
+    board = Boardstate(FEN)
+    moves = generate_moves(board)
+
+    best_move = moves[10]
+    scores = score_moves(moves,best_move,true)
+    moves = sort_moves(moves,scores)
+
+    @assert moves[1] == best_move "Current best move should be played first"
+end
+test_ordering()
+
 function test_best()
     FEN = "K6Q/8/8/8/8/8/8/b6k b - - 0 1"
     board = Boardstate(FEN)
@@ -118,6 +131,7 @@ function bench()
     total_t = 0
     eval_t = 0
     movegen_t = 0
+    movemake_t = 0
     for p in positions[1:50]
         FEN = split(split(p,";")[1],"- bm")[1]*"0"
         println("testing $FEN")
@@ -127,11 +141,12 @@ function bench()
         total_t += time() - t
         println("Completed. Took $(time() - t) seconds.")
         println("Best move = $(best)")
-        eval_t += log.evaltime
-        movegen_t += log.movegentime    
+        eval_t += log.evalδt
+        movegen_t += log.movegenδt
+        movemake_t += log.makeδt   
     end
 
-    println("Took $total_t seconds. $eval_t s evaluating positions, $movegen_t s generating moves.")
+    println("Took $total_t seconds. $(round(eval_t,sigdigits=4)) s evaluating positions, $(round(movegen_t,sigdigits=4)) s generating moves. $(round(movemake_t,sigdigits=4)) s making/unmaking moves")
 end
 
 function profile()
@@ -141,7 +156,7 @@ function profile()
     FEN = split(split(positions[12],";")[1],"- bm")[1]*"0"
     board = Boardstate(FEN)
 
-    best,log = best_move(board)
+    best,log = best_move(board,MAXTIME)
 
     @profile best_move(board)
     Profile.print()

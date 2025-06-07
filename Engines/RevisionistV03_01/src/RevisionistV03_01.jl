@@ -20,7 +20,8 @@ NEW
 
 using logic
 using StaticArrays
-export best_move,evaluate,eval,side_index,MGweighting,EGweighting
+export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
+       score_moves,sort_moves
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
@@ -124,17 +125,16 @@ const MINCAPSCORE = MAXMOVESCORE - 55
 
 "Sorts moves by associated scores"
 function sort_moves(moves,scores)
-    permute = sortperm(scores)
+    permute = sortperm(scores,rev=true)
     return moves[permute]
 end
 
 "Score moves based on PV, MVV-LVA and killers"
-function score_moves(moves,info::SearchInfo,isPV::Bool)
+function score_moves(moves,cur_best::UInt32,isPV::Bool)
     scores = zeros(UInt8,length(moves))
-    best = info.best_mv
 
     for (i,move) in enumerate(moves)
-        if isPV && move == best
+        if isPV && move == cur_best
             scores[i] = MAXMOVESCORE
         end
     end
@@ -143,7 +143,7 @@ end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
 function minimax(board,player,α,β,depth,info::SearchInfo,logger::Logger)
-    #If we run out of time, return best score found so far
+    #If we run out of time, return lower bound on score
     if (time() - info.starttime) > info.maxtime
         logger.stopmidsearch = true
         return α     
@@ -198,7 +198,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     player = sgn(board.Colour)
 
     #root node is always on PV
-    scores = @log_time logger.moveorderδt score_moves(moves,info,true)
+    scores = @log_time logger.moveorderδt score_moves(moves,info.best_mv,true)
     moves = @log_time logger.moveorderδt sort_moves(moves,scores)
     
     for move in moves
@@ -212,7 +212,6 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
             break
         end
 
-        #we are not currently searching full PV so not safe to adopt move from partial search
         if score > α
             info.best_mv = move
             α = score
@@ -243,6 +242,7 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
         if logging
             println("Searched to depth = $(logger.cur_depth). Best move so far: [$(UCImove(info.best_mv))]")
         end
+        #we are not currently searching full PV so not safe to adopt move from partial search
         if !logger.stopmidsearch
             best_move = info.best_mv
         end
@@ -272,6 +272,6 @@ function best_move(board::Boardstate,T_MAX,logging=false)
         println("Reached $(logger.terminal) terminal nodes. Branch cuts: $(unpack(logger.branches_cut)).")
         println("################################################################################################################")
     end
-    return best_move
+    return best_move,logger
 end
 end #module

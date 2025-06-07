@@ -4,6 +4,8 @@ using logic
 import RevisionistV03_01 as bot
 #using libpng_jll
 
+const BOTTIME = 0.1
+
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
     SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 16)
@@ -220,11 +222,10 @@ end
 "Encapsulates behaviour of PvP vs PvE"
 function GUImove!(move,board,vsBOT)
     make_move!(move,board)
-    moves = generate_moves(board)
     if vsBOT && !check_win(board)
         #botmove = bot.best_move(board,moves,UInt8(4),true) #test bot version?
 
-        botmove = bot.best_move(board,0.1,true)
+        botmove,log = bot.best_move(board,BOTTIME,true)
         make_move!(botmove,board)
     end
 end
@@ -333,6 +334,7 @@ end
 function main()
     #SDL_Quit()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    #FEN = "K7/R7/R7/8/8/8/8/7k b - - 0 1"
 
     WIDTH = 800
     sq_width = Int(WIDTH÷8)
