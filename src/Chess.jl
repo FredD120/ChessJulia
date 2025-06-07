@@ -1,10 +1,10 @@
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 using logic
-import RevisionistV03_01 as bot
+import RevisionistV03_02 as bot
 #using libpng_jll
 
-const BOTTIME = 0.1
+const BOTTIME = 0.01
 
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)

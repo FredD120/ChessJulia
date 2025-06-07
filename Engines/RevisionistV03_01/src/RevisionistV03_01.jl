@@ -257,19 +257,15 @@ function best_move(board::Boardstate,T_MAX,logging=false)
     best_move,logger = iterative_deepening(board,T_MAX,logging)
     δt = time() - t
 
-    if best_move == NULLMOVE
-        if logging
-            println("Failed to find move better than null move")
-        end
-        return moves[1]
-    end
+    best_move != NULLMOVE || error("Failed to find move better than null move")
+
     if logging
         println("Move score = $(logger.best_score). Evaluated $(logger.pos_eval) moves. Reached depth $((logger.cur_depth))")
         if logger.stopmidsearch
             println("Ran out of time mid search.")
         end
 
-        println("Time: $(round(δt,sigdigits=4))s. Evaluation: $(Int(round(100*logger.evalδt/δt)))%. Movegen: $(Int(round(100*logger.movegenδt/δt)))%. Move ordering: $(Int(round(100*logger.moveorderδt/δt)))%. Make/Unmake: $(Int(round(100*logger.makeδt/δt)))%. Gameover: $(Int(round(100*logger.terminalδt/δt)))%.")
+        println("Time: $(round(δt,sigdigits=6))s. Evaluation: $(Int(round(100*logger.evalδt/δt)))%. Movegen: $(Int(round(100*logger.movegenδt/δt)))%. Move ordering: $(Int(round(100*logger.moveorderδt/δt)))%. Make/Unmake: $(Int(round(100*logger.makeδt/δt)))%. Gameover: $(Int(round(100*logger.terminalδt/δt)))%.")
         println("Reached $(logger.terminal) terminal nodes. Branch cuts: $(unpack(logger.branches_cut)).")
         println("################################################################################################################")
     end

@@ -237,7 +237,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
             println("Ran out of time mid search.")
         end
 
-        println("Time taken: $(round(δt,sigdigits=4))s. Reached $(logger.terminal) terminal nodes. Branch cuts: $(unpack(logger.branches_cut)).")
+        println("Time taken: $(round(δt,sigdigits=6))s. Reached $(logger.terminal) terminal nodes. Branch cuts: $(unpack(logger.branches_cut)).")
         println("################################################################################################################")
     end
     return best_move,logger
