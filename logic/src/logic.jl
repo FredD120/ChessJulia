@@ -24,7 +24,7 @@ King, Queen, Rook, Bishop, Knight, Pawn, white, black, val, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
-ColourPieceID, generate_attacks, gameover!
+ColourPieceID, generate_attacks, gameover!,Opposite
 
 using InteractiveUtils
 using JLD2
@@ -1131,7 +1131,9 @@ function any_pawn_moves(pieceBB,all_pcs,ally_pcsBB,colour::Bool,info::LegalInfo)
     attackleft |= Battackleft & info.bishoppins
     attackright |= Battackright & info.bishoppins
 
-    if ((attackleft & ~ally_pcsBB) & (info.checks | info.blocks)) > 0 || ((attackright & ~ally_pcsBB) & (info.checks | info.blocks)) > 0
+    enemy_piecesBB = all_pcs & ~ally_pcsBB
+
+    if ((attackleft & enemy_piecesBB) & (info.checks | info.blocks)) > 0 || ((attackright & enemy_piecesBB) & (info.checks | info.blocks)) > 0
         return true
     end
     return false

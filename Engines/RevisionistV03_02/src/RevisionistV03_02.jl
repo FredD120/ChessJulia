@@ -225,12 +225,8 @@ function best_move(board::Boardstate,T_MAX,logging=false)
     best_move,logger = iterative_deepening(board,T_MAX,logging)
     δt = time() - t
 
-    if best_move == NULLMOVE
-        if logging
-            println("Failed to find move better than null move")
-        end
-        return moves[1]
-    end
+    best_move != NULLMOVE || error("Failed to find move better than null move")
+
     if logging
         println("Move score = $(logger.best_score). Evaluated $(logger.pos_eval) moves. Reached depth $((logger.cur_depth))")
         if logger.stopmidsearch
