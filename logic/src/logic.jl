@@ -2,6 +2,8 @@ module logic
 
 ###TO THINK ABOUT###
 
+#Is EPcount,halfmovecount or castlecount occasionally exceeding 256?
+
 ###FEATURES###
 #Test whether in check (Bool) for check extensions (or just reference legal_info)
 #Test for check/stale-mate as a seperate function
@@ -288,9 +290,9 @@ const GameState = Union{Neutral,Loss,Draw}
 mutable struct BoardData
     Halfmoves::Vector{UInt8}
     Castling::Vector{UInt8}
-    CastleCount::Vector{UInt8}
+    CastleCount::Vector{UInt16}
     EnPassant::Vector{UInt64}
-    EPCount::Vector{UInt8}
+    EPCount::Vector{UInt16}
     ZHashHist::Vector{UInt64}
 end
 
@@ -1315,6 +1317,13 @@ EPlocation(colour::UInt8,moveloc) = ifelse(colour==0,moveloc+8,moveloc-8)
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist. update castling rights"
 function make_move!(move::UInt32,board::Boardstate)
     mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag = unpack_move(move::UInt32)
+
+    #=
+    if board.Data.CastleCount[end] > 100
+        println("Castle count = $(board.Data.CastleCount[end])")
+        error("Castle")
+    end
+    =#
 
     #0 = white, 1 = black
     ColId = ColID(board.Colour)

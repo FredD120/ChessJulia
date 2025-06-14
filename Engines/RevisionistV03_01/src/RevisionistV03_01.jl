@@ -45,7 +45,7 @@ SearchInfo(t_start,t_max) = SearchInfo(UInt8(0),t_start,t_max,NULLMOVE)
 mutable struct Logger
     best_score::Int32
     pos_eval::Int32
-    terminal::Int32
+    cum_nodes::Int32
     branches_cut::Dict{UInt8,UInt64}
     evalδt::Float64
     movegenδt::Float64
@@ -153,7 +153,7 @@ function minimax(board,player,α,β,depth,info::SearchInfo,logger::Logger)
     #Evaluate whether we are in a terminal node
     legal_info = @log_time logger.terminalδt gameover!(board)
     if board.State != Neutral()
-        logger.terminal += 1
+        logger.pos_eval += 1
         value = @log_time logger.evalδt eval(board.State,depth)
         return value
 
@@ -246,6 +246,8 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
         #we are not currently searching full PV so not safe to adopt move from partial search
         if !logger.stopmidsearch
             best_move = info.best_mv
+            logger.cum_nodes += logger.pos_eval
+            logger.pos_eval = 0
         end
     end
     return best_move, logger
