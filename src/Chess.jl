@@ -1,8 +1,8 @@
 using chessGUI
 using logic
-import RevisionistV03_02 as bot
+import RevisionistV03_03 as bot
 
-const BOTTIME = 0.01
+const BOTTIME = 1
 
 "update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
@@ -31,16 +31,16 @@ function promote_move!(logicstate,index,legal_moves,BOT)
 end
 
 "If pawn is promoting, highlight possible promotions to display on GUI"
-function promote_squares(prompos,Whitemove,position)
+function promote_squares(prompos,Whitemove,posit)
     inc = ifelse(Whitemove==0,8,-8)
     highlight = []
     Ptype = [val(Queen()),val(Rook()),val(Bishop()),val(Knight())]
     for i in 0:3
         pos = prompos+i*inc
         push!(highlight,pos)
-        position[pos+1] = Ptype[i+1]+Whitemove*val(Black())
+        posit[pos+1] = Ptype[i+1]+Whitemove*black
     end
-    return highlight,position
+    return highlight,posit
 end
 
 "update logic with move made and return true if trying to promote"
@@ -131,7 +131,7 @@ function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
             end
 
             if GUIst.promoting
-                hi_mv,pos = promote_squares(mouse_pos,logic.ColID(logicstate.Colour),position)
+                hi_mv,pos = promote_squares(mouse_pos,logic.ColID(logicstate.Colour),GUIst.position)
                 GUIst.highlight_moves = hi_mv
                 GUIst.position = pos
             else
@@ -158,15 +158,22 @@ function main()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     #FEN = "K7/R7/R7/8/8/8/8/7k b - - 0 1"
 
+    vsbot = true
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
     legal_moves = generate_moves(logicstate)
+
+    #get around JIT compilation
+    if vsbot
+        best_move,log = bot.best_move(logicstate,BOTTIME)
+    end
+
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     promoting = false
 
     GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting)
     
-    main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,true)
+    main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,vsbot)
 end
 main()
