@@ -1,8 +1,8 @@
 using chessGUI
 using logic
-import RevisionistV03_03 as bot
+import RevisionistV03_04 as bot
 
-const BOTTIME = 0.05
+const BOTTIME = 0.5
 
 "update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
@@ -34,7 +34,7 @@ end
 function promote_squares(prompos,Whitemove,posit)
     inc = ifelse(Whitemove==0,8,-8)
     highlight = []
-    Ptype = [val(Queen()),val(Rook()),val(Bishop()),val(Knight())]
+    Ptype = [Queen,Rook,Bishop,Knight]
     for i in 0:3
         pos = prompos+i*inc
         push!(highlight,pos)
@@ -89,7 +89,7 @@ function GUImove!(move,board,GUIst,vsBOT)
     if vsBOT && !check_win(board)
         #JIT compile
         if GUIst.counter == 0
-            botmove,log = bot.best_move(board,BOTTIME,true)
+            botmove,log = bot.best_move(board,0.5)
             GUIst.counter += 1
         end
         botmove,log = bot.best_move(board,BOTTIME,true)
@@ -120,7 +120,7 @@ function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
     xpos = getproperty(mouse_evt,:x)
     ypos = getproperty(mouse_evt,:y)
     mouse_pos = board_coords(xpos,ypos,square_width)
-    kingpos = trailing_zeros(ally_pieces(logicstate)[val(King())])
+    kingpos = trailing_zeros(ally_pieces(logicstate)[King])
 
     if (length(GUIst.highlight_moves) > 0)
         if mouse_pos in GUIst.highlight_moves

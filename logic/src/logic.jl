@@ -21,8 +21,8 @@ To check generated code:
 =#
 
 export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove,
-Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft, Piece,
-King, Queen, Rook, Bishop, Knight, Pawn, white, black, val, piecetypes,
+Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
+King, Queen, Rook, Bishop, Knight, Pawn, white, black, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
@@ -35,25 +35,16 @@ using StaticArrays
 rng = Xoshiro(2955)
 
 const NULL_PIECE = UInt8(0)
-
-abstract type Piece end
-struct King <:Piece end
-struct Queen <:Piece end
-struct Rook <:Piece end
-struct Bishop <:Piece end
-struct Knight <:Piece end
-struct Pawn <:Piece end
+"Index associated with piecetype"
+const King = UInt8(1)
+const Queen = UInt8(2)
+const Rook = UInt8(3)
+const Bishop = UInt8(4)
+const Knight = UInt8(5)
+const Pawn = UInt8(6)
 
 "Iterating through singleton piecetypes. Can cause type instability"
-const piecetypes = [King(),Queen(),Rook(),Bishop(),Knight(),Pawn()]
-
-"Index associated with piecetype"
-val(::King) = UInt8(1)
-val(::Queen) = UInt8(2)
-val(::Rook) = UInt8(3)
-val(::Bishop) = UInt8(4)
-val(::Knight) = UInt8(5)
-val(::Pawn) = UInt8(6)
+const piecetypes = [King,Queen,Rook,Bishop,Knight,Pawn]
 
 "Colour ID used in movegen/boardstate"
 const white = UInt8(0)
@@ -73,18 +64,10 @@ Opposite(ColourIndex::UInt8)::UInt8 = (ColourIndex+6)%12
 Opposite(colour::Bool) = !colour
 
 "Helper functions to return index of piece BB in piece list"
-ColourPieceID(colour::UInt8,piece::Piece)   = colour + val(piece)
 ColourPieceID(colour::UInt8,piece::Integer) = colour + piece
 
 "Index into PST based on colour index"
 side_index(colour::UInt8,ind) = ifelse(colour==0,ind,8*rank(ind) + file(ind))
-
-Base.string(::King) = "King"
-Base.string(::Queen) = "Queen"
-Base.string(::Rook) = "Rook"
-Base.string(::Bishop) = "Bishop"
-Base.string(::Knight) = "Knight"
-Base.string(::Pawn) = "Pawn"
 
 "Least significant bit of a bitboard, returned as a UInt8"
 LSB(BB::Integer) = UInt8(trailing_zeros(BB))
@@ -274,7 +257,7 @@ function set_PST!(score::Vector{Int32},pieces::AbstractArray{UInt64})
     for type in piecetypes
         for colour in [white,black]
             for pos in identify_locations(pieces[ColourPieceID(colour,type)])
-                update_PST_score!(score,colour,val(type),pos,+1)
+                update_PST_score!(score,colour,type,pos,+1)
             end
         end
     end
@@ -310,7 +293,7 @@ mutable struct Boardstate
 end
 
 "Find position of king on bitboard"
-king_pos(board::Boardstate,side_index) = LSB(board.pieces[side_index+val(King())])
+king_pos(board::Boardstate,side_index) = LSB(board.pieces[side_index+King])
 
 "returns a list of numbers between 0 and 63 to indicate positions on a chessboard"
 function identify_locations(pieceBB::Integer)::Vector{UInt8}
@@ -434,7 +417,7 @@ function Boardstate(FEN)
     MoveHistory = Vector{UInt32}()
     rank = nothing
     file = nothing
-    FENdict = Dict('K'=>val(King()),'Q'=>val(Queen()),'R'=>val(Rook()),'B'=>val(Bishop()),'N'=>val(Knight()),'P'=>val(Pawn()))
+    FENdict = Dict('K'=>King,'Q'=>Queen,'R'=>Rook,'B'=>Bishop,'N'=>Knight,'P'=>Pawn)
 
     #Keep track of where we are on chessboard
     i = UInt32(0)         
@@ -586,18 +569,18 @@ end
 function attack_pcs(pc_list::AbstractArray{UInt64},all_pcs::UInt64,location::Integer,colour::Bool)::UInt64
     attacks = UInt64(0)
     knightmoves = possible_knight_moves(location)
-    attacks |= (knightmoves & pc_list[val(Knight())])
+    attacks |= (knightmoves & pc_list[Knight])
 
     rookmoves = possible_rook_moves(location,all_pcs)
-    rookattacks = (rookmoves & (pc_list[val(Rook())] | pc_list[val(Queen())]))
+    rookattacks = (rookmoves & (pc_list[Rook] | pc_list[Queen]))
     attacks |= rookattacks
 
     bishopmoves = possible_bishop_moves(location,all_pcs)
-    bishopattacks = (bishopmoves & (pc_list[val(Bishop())] | pc_list[val(Queen())]))
+    bishopattacks = (bishopmoves & (pc_list[Bishop] | pc_list[Queen]))
     attacks |= bishopattacks
 
     pawnattacks = possible_pawn_moves(UInt64(1)<<location,colour)
-    attacks |= pawnattacks & pc_list[val(Pawn())]
+    attacks |= pawnattacks & pc_list[Pawn]
 
     return attacks
 end
@@ -606,32 +589,32 @@ end
 function all_poss_moves(pc_list::AbstractArray{UInt64},all_pcs,colour::Bool)::UInt64
     attacks = UInt64(0)
 
-    pieceBB = pc_list[val(King())]
+    pieceBB = pc_list[King]
     for location in pieceBB
         attacks |= possible_king_moves(location)
     end
     
-    pieceBB = pc_list[val(Knight())]
+    pieceBB = pc_list[Knight]
     for location in pieceBB
         attacks |= possible_knight_moves(location)
     end
 
-    pieceBB = pc_list[val(Bishop())]
+    pieceBB = pc_list[Bishop]
     for location in pieceBB
         attacks |= possible_bishop_moves(location,all_pcs)
     end
 
-    pieceBB = pc_list[val(Rook())]
+    pieceBB = pc_list[Rook]
     for location in pieceBB
         attacks |= possible_rook_moves(location,all_pcs)
     end
 
-    pieceBB = pc_list[val(Queen())]
+    pieceBB = pc_list[Queen]
     for location in pieceBB
         attacks |= possible_queen_moves(location,all_pcs)
     end
 
-    attacks |= possible_pawn_moves(pc_list[val(Pawn())],Opposite(colour))
+    attacks |= possible_pawn_moves(pc_list[Pawn],Opposite(colour))
     return attacks
 end
 
@@ -649,7 +632,7 @@ function detect_pins(pos,pc_list,all_pcs,ally_pcs)
     #only want moves found after removing blockers
     rpin_attacks = rook_no_blocks & ~slide_attacks
     #start by adding attacker to pin line
-    rookpins = rpin_attacks & (pc_list[val(Rook())] | pc_list[val(Queen())])
+    rookpins = rpin_attacks & (pc_list[Rook] | pc_list[Queen])
     #iterate through rooks/queens pinning king
     for loc in rookpins
         #add squares on pin line to pinning BB
@@ -659,7 +642,7 @@ function detect_pins(pos,pc_list,all_pcs,ally_pcs)
     #same but for bishops
     bishop_no_blocks = possible_bishop_moves(pos,blocks_removed) 
     bpin_attacks = bishop_no_blocks & ~slide_attacks
-    bishoppins = bpin_attacks & (pc_list[val(Bishop())] | pc_list[val(Queen())])
+    bishoppins = bpin_attacks & (pc_list[Bishop] | pc_list[Queen])
     for loc in bishoppins
         bishoppins |= bishop_no_blocks & possible_bishop_moves(loc,blocks_removed)
     end
@@ -677,7 +660,7 @@ function attack_info(board::Boardstate)::LegalInfo
     
     ally_pcs = board.piece_union[ColID(board.Colour)+1]
     all_pcs = board.piece_union[end]
-    KingBB = board.pieces[board.Colour+val(King())]
+    KingBB = board.pieces[board.Colour+King]
     position = LSB(KingBB)
     colour::Bool = Whitesmove(board.Colour)
 
@@ -694,14 +677,14 @@ function attack_info(board::Boardstate)::LegalInfo
         #if only a single sliding piece is attacking the king, it can be blocked
         if attacker_num == 1
             kingmoves = possible_rook_moves(position,all_pcs)
-            slide_attckers = kingmoves & (enemy_list[val(Rook())] | enemy_list[val(Queen())])
+            slide_attckers = kingmoves & (enemy_list[Rook] | enemy_list[Queen])
             for attack_pos in slide_attckers
                 attackmoves = possible_rook_moves(attack_pos,all_pcs)
                 blocks |= attackmoves & kingmoves
             end
 
             kingmoves = possible_bishop_moves(position,all_pcs)
-            slide_attckers = kingmoves & (enemy_list[val(Bishop())] | enemy_list[val(Queen())])
+            slide_attckers = kingmoves & (enemy_list[Bishop] | enemy_list[Queen])
             for attack_pos in slide_attckers
                 attackmoves = possible_bishop_moves(attack_pos,all_pcs)
                 blocks |= attackmoves & kingmoves
@@ -718,7 +701,7 @@ function create_castle(KorQ,WorB)
     #WorB is 0 if white, 1 if black
     from = UInt8(63 - 7*KorQ - WorB*56)
     to = UInt8(from - 2 + 5*KorQ)
-    return Move(val(King()),from,to,NULL_PIECE,KCASTLE+KorQ)
+    return Move(King,from,to,NULL_PIECE,KCASTLE+KorQ)
 end
 
 "creates a move from a given location using the Move struct, with flag for attacks"
@@ -807,16 +790,16 @@ function get_queen_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_p
         legal = legal_queen_moves(loc,all_pcs,typemax(UInt64),typemax(UInt64),info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-        moves_from_location!(val(Queen()),moves,enemy_vec,quiets,loc,false)
-        moves_from_location!(val(Queen()),moves,enemy_vec,attacks,loc,true)
+        moves_from_location!(Queen,moves,enemy_vec,quiets,loc,false)
+        moves_from_location!(Queen,moves,enemy_vec,attacks,loc,true)
     end
 
     for loc in RpinnedBB
         legal = legal_rook_moves(loc,all_pcs,info.rookpins,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-        moves_from_location!(val(Queen()),moves,enemy_vec,quiets,loc,false)
-        moves_from_location!(val(Queen()),moves,enemy_vec,attacks,loc,true)
+        moves_from_location!(Queen,moves,enemy_vec,quiets,loc,false)
+        moves_from_location!(Queen,moves,enemy_vec,attacks,loc,true)
         
     end
 
@@ -824,8 +807,8 @@ function get_queen_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_p
         legal = legal_bishop_moves(loc,all_pcs,info.bishoppins,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-        moves_from_location!(val(Queen()),moves,enemy_vec,quiets,loc,false)
-        moves_from_location!(val(Queen()),moves,enemy_vec,attacks,loc,true)
+        moves_from_location!(Queen,moves,enemy_vec,quiets,loc,false)
+        moves_from_location!(Queen,moves,enemy_vec,attacks,loc,true)
     end
 end
 
@@ -864,8 +847,8 @@ function get_rook_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_pc
             legal = legal_rook_moves(loc,all_pcs,rpins,info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-            moves_from_location!(val(Rook()),moves,enemy_vec,quiets,loc,false)
-            moves_from_location!(val(Rook()),moves,enemy_vec,attacks,loc,true)
+            moves_from_location!(Rook,moves,enemy_vec,quiets,loc,false)
+            moves_from_location!(Rook,moves,enemy_vec,attacks,loc,true)
         end
     end
 end
@@ -895,8 +878,8 @@ function get_bishop_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_
             legal = legal_bishop_moves(loc,all_pcs,bpins,info)
             quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-            moves_from_location!(val(Bishop()),moves,enemy_vec,quiets,loc,false)
-            moves_from_location!(val(Bishop()),moves,enemy_vec,attacks,loc,true)
+            moves_from_location!(Bishop,moves,enemy_vec,quiets,loc,false)
+            moves_from_location!(Bishop,moves,enemy_vec,attacks,loc,true)
         end
     end
 end
@@ -923,8 +906,8 @@ function get_knight_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_
         legal = legal_knight_moves(loc,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-        moves_from_location!(val(Knight()),moves,enemy_vec,quiets,loc,false)
-        moves_from_location!(val(Knight()),moves,enemy_vec,attacks,loc,true)
+        moves_from_location!(Knight,moves,enemy_vec,quiets,loc,false)
+        moves_from_location!(Knight,moves,enemy_vec,attacks,loc,true)
     end
 end
 
@@ -945,8 +928,8 @@ function get_king_moves!(moves,pieceBB,enemy_vec::AbstractArray{UInt64},enemy_pc
         legal = legal_king_moves(loc,info)
         quiets,attacks = QAtt(legal,all_pcs,enemy_pcs,MODE)
 
-        moves_from_location!(val(King()),moves,enemy_vec,quiets,loc,false)
-        moves_from_location!(val(King()),moves,enemy_vec,attacks,loc,true)
+        moves_from_location!(King,moves,enemy_vec,quiets,loc,false)
+        moves_from_location!(King,moves,enemy_vec,attacks,loc,true)
     end
     #cannot castle out of check. castling is a quiet move
     if info.attack_num == 0 && MODE == ALLMOVES
@@ -1007,14 +990,14 @@ end
 "Create list of pawn push moves with a given flag"
 function push_moves!(moves,singlepush,promotemask,shift,blocks,flag,MODE::UInt64)
     for q1 in ((singlepush*MODE) & blocks & promotemask)
-        append_moves!(moves,val(Pawn()),UInt8(q1+shift),q1,NULL_PIECE,flag)
+        append_moves!(moves,Pawn,UInt8(q1+shift),q1,NULL_PIECE,flag)
     end
 end
 
 "Create list of double pawn push moves"
 function push_moves!(moves,doublepush,shift,blocks,MODE::UInt64)
     for q2 in ((doublepush*MODE) & blocks)
-        push!(moves,Move(val(Pawn()),UInt8(q2+2*shift),q2,NULL_PIECE,DPUSH))
+        push!(moves,Move(Pawn,UInt8(q2+2*shift),q2,NULL_PIECE,DPUSH))
     end
 end
 
@@ -1022,11 +1005,11 @@ end
 function capture_moves!(moves,leftattack,rightattack,promotemask,shift,enemy_pcs,checks,enemy_vec::AbstractArray{UInt64},flag)
     for la in (leftattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,la)
-        append_moves!(moves,val(Pawn()),UInt8(la+shift+1),la,attack_pcID,flag)
+        append_moves!(moves,Pawn,UInt8(la+shift+1),la,attack_pcID,flag)
     end
     for ra in (rightattack & enemy_pcs & promotemask & checks)
         attack_pcID = identify_piecetype(enemy_vec,ra)
-        append_moves!(moves,val(Pawn()),UInt8(ra+shift-1),ra,attack_pcID,flag)
+        append_moves!(moves,Pawn,UInt8(ra+shift-1),ra,attack_pcID,flag)
     end
 end
 
@@ -1037,7 +1020,7 @@ function EPedgecase(from,EPcap,kingpos,all_pcs,enemy_vec)
         #all pcs BB after en-passant
         after_EP = setzero(setzero(all_pcs,from),EPcap)
         kingrookmvs = possible_rook_moves(kingpos,after_EP)
-        if (kingrookmvs & (enemy_vec[val(Rook())] | enemy_vec[val(Queen())])) > 0
+        if (kingrookmvs & (enemy_vec[Rook] | enemy_vec[Queen])) > 0
             return false
         end
     end
@@ -1049,7 +1032,7 @@ function push_EP!(moves,from,to,shift,checks,all_pcs,enemy_vec,kingpos)
     EPcap = to+shift
     if checks & (UInt64(1) << EPcap) > 0
         if EPedgecase(from,EPcap,kingpos,all_pcs,enemy_vec)
-            push!(moves,Move(val(Pawn()),from,to,val(Pawn()),EPFLAG))
+            push!(moves,Move(Pawn,from,to,Pawn,EPFLAG))
         end
     end
 end
@@ -1176,7 +1159,7 @@ function generate_moves(board::Boardstate,legal_info::LegalInfo=attack_info(boar
     enemy_pcsBB = board.piece_union[ColID(Opposite(board.Colour))+1] 
     all_pcsBB = board.piece_union[end]
 
-    kingBB = ally[val(King())]
+    kingBB = ally[King]
     kingpos = LSB(kingBB)
 
     get_king_moves!(movelist,kingBB,enemy,enemy_pcsBB,all_pcsBB,
@@ -1185,19 +1168,19 @@ function generate_moves(board::Boardstate,legal_info::LegalInfo=attack_info(boar
     #if multiple checks on king, only king can move
     if legal_info.attack_num <= 1
         #run through pieces and BBs, adding moves to list
-        get_knight_moves!(movelist,ally[val(Knight())],enemy,
+        get_knight_moves!(movelist,ally[Knight],enemy,
             enemy_pcsBB,all_pcsBB,MODE,legal_info)
 
-        get_bishop_moves!(movelist,ally[val(Bishop())],enemy,
+        get_bishop_moves!(movelist,ally[Bishop],enemy,
             enemy_pcsBB,all_pcsBB,MODE,legal_info)
         
-        get_rook_moves!(movelist,ally[val(Rook())],enemy,
+        get_rook_moves!(movelist,ally[Rook],enemy,
             enemy_pcsBB,all_pcsBB,MODE,legal_info)
         
-        get_queen_moves!(movelist,ally[val(Queen())],enemy,
+        get_queen_moves!(movelist,ally[Queen],enemy,
             enemy_pcsBB,all_pcsBB,MODE,legal_info)
 
-        get_pawn_moves!(movelist,ally[val(Pawn())],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
+        get_pawn_moves!(movelist,ally[Pawn],enemy,enemy_pcsBB,all_pcsBB,board.EnPass,
         Whitesmove(board.Colour),kingpos,MODE,legal_info)
     end
     return movelist
@@ -1218,17 +1201,17 @@ function gameover!(board::Boardstate)
         all_pcsBB = board.piece_union[end]
         ally_pcsBB = board.piece_union[ColID(board.Colour)+1] 
 
-        kingBB = board.pieces[board.Colour+val(King())]
+        kingBB = board.pieces[board.Colour+King]
         kingpos = LSB(kingBB)
 
         if any_king_moves(kingpos,ally_pcsBB,info) 
             board.State = Neutral()
         elseif info.attack_num <= 1 && (
-                any_pawn_moves(board.pieces[board.Colour+val(Pawn())],all_pcsBB,ally_pcsBB,Whitesmove(board.Colour),info) ||
-                any_knight_moves(board.pieces[board.Colour+val(Knight())],ally_pcsBB,info) ||
-                any_bishop_moves(board.pieces[board.Colour+val(Bishop())],all_pcsBB,ally_pcsBB,info) ||
-                any_rook_moves(board.pieces[board.Colour+val(Rook())],all_pcsBB,ally_pcsBB,info) ||
-                any_queen_moves(board.pieces[board.Colour+val(Queen())],all_pcsBB,ally_pcsBB,info))
+                any_pawn_moves(board.pieces[board.Colour+Pawn],all_pcsBB,ally_pcsBB,Whitesmove(board.Colour),info) ||
+                any_knight_moves(board.pieces[board.Colour+Knight],ally_pcsBB,info) ||
+                any_bishop_moves(board.pieces[board.Colour+Bishop],all_pcsBB,ally_pcsBB,info) ||
+                any_rook_moves(board.pieces[board.Colour+Rook],all_pcsBB,ally_pcsBB,info) ||
+                any_queen_moves(board.pieces[board.Colour+Queen],all_pcsBB,ally_pcsBB,info))
             board.State = Neutral() 
         else
             if info.attack_num > 0
@@ -1301,13 +1284,13 @@ end
 "Decide which piecetype to promote to"
 function promote_type(flag)
     if flag == PROMQUEEN
-        return val(Queen())
+        return Queen
     elseif flag == PROMROOK
-        return val(Rook())
+        return Rook
     elseif flag == PROMBISHOP
-        return val(Bishop())
+        return Bishop
     elseif flag == PROMKNIGHT
-        return val(Knight())
+        return Knight
     end
 end
 
@@ -1330,12 +1313,12 @@ function make_move!(move::UInt32,board::Boardstate)
 
     #deal with castling
     if (mv_flag == KCASTLE) | (mv_flag == QCASTLE)
-        move_piece!(board,board.Colour,val(Rook()),mv_from,mv_to)
+        move_piece!(board,board.Colour,Rook,mv_from,mv_to)
         updateCrights!(board,ColId,0)
         if mv_flag == KCASTLE
-            Kcastle!(board,board.Colour,val(King()))
+            Kcastle!(board,board.Colour,King)
         else
-            Qcastle!(board,board.Colour,val(King()))
+            Qcastle!(board,board.Colour,King)
         end
         #castling does not reset halfmove count
         board.Data.Halfmoves[end] += 1
@@ -1343,7 +1326,7 @@ function make_move!(move::UInt32,board::Boardstate)
     #update castling rights if not castling    
     else
         if board.Castle > 0
-            if mv_pc_type == val(King())
+            if mv_pc_type == King
                 updateCrights!(board,ColId,0)
             else
                 #lose self castle rights
@@ -1380,7 +1363,7 @@ function make_move!(move::UInt32,board::Boardstate)
                 end
                 destroy_piece!(board,Opposite(board.Colour),mv_cap_type,destroy_loc)
                 push!(board.Data.Halfmoves,0)
-            elseif mv_pc_type == val(Pawn())
+            elseif mv_pc_type == Pawn
                 push!(board.Data.Halfmoves,0)
             else
                 board.Data.Halfmoves[end] += 1
@@ -1427,12 +1410,12 @@ function unmake_move!(board::Boardstate)
 
 
         if (mv_flag == KCASTLE)|(mv_flag == QCASTLE)
-            move_piece!(board,OppCol,val(Rook()),mv_to,mv_from)
+            move_piece!(board,OppCol,Rook,mv_to,mv_from)
             #unmaking a kingside castle is the same as a queenside castle and vice-versa
             if mv_flag == KCASTLE
-                Qcastle!(board,OppCol,val(King()))
+                Qcastle!(board,OppCol,King)
             else
-                Kcastle!(board,OppCol,val(King()))
+                Kcastle!(board,OppCol,King)
             end
         
         #deal with everything other than castling

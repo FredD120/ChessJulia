@@ -48,7 +48,7 @@ function fetch_game(E1,E2,match_num,game_num)
 end
 
 function main()
-    FEN,moves = fetch_game("RevisionistV03_01","RevisionistV03_02",1,1)
+    FEN,moves = fetch_game("RevisionistV03_02","RevisionistV03_03",1,1)
 
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
@@ -56,7 +56,7 @@ function main()
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     promoting = false
-    counter = 0
+    counter = 1
 
     GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting,counter)
 

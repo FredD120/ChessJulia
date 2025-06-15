@@ -1,10 +1,9 @@
-using RevisionistV03_01
+using RevisionistV03_04
 using logic
 using Profile
 
-const benchmark = true
 const profil = false
-const MAXTIME = 0.05
+const MAXTIME = 0.1
 
 function test_eval()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -32,6 +31,39 @@ function test_weighting()
     @assert MGweighting(num_pcs) < EGweighting(num_pcs) "At 10 pieces, weighted towards endgame"
 end
 test_weighting()
+
+function test_triangular()
+    PVtable = zeros(triangle_number(MAXDEPTH))
+    PV_len = MAXDEPTH
+    new_move = 1
+    tri_count = 0
+
+    for ply in MAXDEPTH-1:-1:0
+        tri_count += 1
+        copy_PV!(PVtable,ply,PV_len,new_move)
+        @assert sum(PVtable) == triangle_number(tri_count)
+    end
+end
+test_triangular()
+
+function test_MVVLVA()
+    FEN = "8/8/8/8/8/8/q1r5/1K6 w - - 0 1"
+    board = Boardstate(FEN)
+    moves = generate_moves(board)
+
+    scores = score_moves(moves,false)
+    
+    for (move,score) in zip(moves,scores)
+        if cap_type(move) == Queen
+            @assert score == maximum(scores)
+            @assert score > MINCAPSCORE
+        elseif cap_type(move) == logic.NULL_PIECE
+            @assert score == minimum(scores)
+            @assert score < MINCAPSCORE
+        end
+    end
+end
+test_MVVLVA()
 
 function test_positional()
     FEN = "1n2k1n1/8/8/8/8/8/8/4K3 b KQkq - 0 1"
@@ -72,7 +104,7 @@ function test_ordering()
     moves = generate_moves(board)
 
     best_move = moves[10]
-    scores = score_moves(moves,best_move,true)
+    scores = score_moves(moves,true,best_move)
     moves = sort_moves(moves,scores)
 
     @assert moves[1] == best_move "Current best move should be played first"
@@ -125,30 +157,6 @@ function test_mate()
 end
 test_mate()
 
-function bench()
-    positions = readlines("$(dirname(@__DIR__))/test/test_positions.txt")
-
-    total_t = 0
-    eval_t = 0
-    movegen_t = 0
-    movemake_t = 0
-    for p in positions[1:50]
-        FEN = split(split(p,";")[1],"- bm")[1]*"0"
-        println("testing $FEN")
-        board = Boardstate(FEN)
-        t = time()
-        best,log = best_move(board,MAXTIME)
-        total_t += time() - t
-        println("Completed. Took $(time() - t) seconds.")
-        println("Best move = $(best)")
-        eval_t += log.evalδt
-        movegen_t += log.movegenδt
-        movemake_t += log.makeδt   
-    end
-
-    println("Took $total_t seconds. $(round(eval_t,sigdigits=4)) s evaluating positions, $(round(movegen_t,sigdigits=4)) s generating moves. $(round(movemake_t,sigdigits=4)) s making/unmaking moves")
-end
-
 function profile()
     positions = readlines("$(dirname(@__DIR__))/test/test_positions.txt")
 
@@ -158,21 +166,12 @@ function profile()
 
     best,log = best_move(board,MAXTIME)
 
-    @profile best_move(board)
+    @profile best_move(board,MAXTIME*10)
     Profile.print()
 end
 if profil 
     profile()
 end
 
-if benchmark
-    bench()
-    println("All tests passed")
+println("All tests passed")
 
-    #best for 1st 50 positions:
-    #1.605 seconds total
-    #0.12 seconds evaluation
-    #0.287 seconds move gen
-else
-    println("All cheap tests passed") 
-end

@@ -121,7 +121,7 @@ function test_movfromloc()
     simpleFEN = "8/8/8/8/8/8/8/8 w KQkq - 0 1"
     board = Boardstate(simpleFEN)
     moves = Vector{UInt32}()
-    logic.moves_from_location!(logic.val(King()),moves,logic.enemy_pieces(board),UInt64(3),UInt8(2),false)
+    logic.moves_from_location!(logic.King,moves,logic.enemy_pieces(board),UInt64(3),UInt8(2),false)
     @assert length(moves) == 2
     @assert cap_type(moves[1]) == 0
     @assert from(moves[2]) == 2
@@ -177,7 +177,7 @@ function test_castle()
             Kcount +=1
         elseif flag(m) == QCASTLE
             Qcount +=1
-        elseif (from(m) == 63) & (cap_type(m) == val(Rook()))
+        elseif (from(m) == 63) & (cap_type(m) == Rook)
             make_move!(m,board)
         end
     end
@@ -225,8 +225,8 @@ function test_pawns()
     board = Boardstate(pFEN)
     moves = generate_moves(board)
 
-    @assert count(i->(pc_type(i)==val(Pawn())),moves) == 3 "Pinned/blocked by bishop"
-    @assert count(i->(cap_type(i)==val(Bishop())),moves) == 1 "Capture bishop along pin"
+    @assert count(i->(pc_type(i)==Pawn),moves) == 3 "Pinned/blocked by bishop"
+    @assert count(i->(cap_type(i)==Bishop),moves) == 1 "Capture bishop along pin"
 
     promFEN = "K3r4/1r2P3/8/8/8/8/8/8 w - - 0 1"
     board = Boardstate(promFEN)
@@ -235,13 +235,13 @@ function test_pawns()
     @assert length(findall(i->flag(i)==PROMROOK,moves)) == 1 "One of each promote type R"
     @assert length(findall(i->flag(i)==PROMBISHOP,moves)) == 1 "One of each promote type B"
     @assert length(findall(i->flag(i)==PROMKNIGHT,moves)) == 1 "One of each promote type N"
-    @assert length(findall(i->cap_type(i)==val(Rook()),moves)) == 4 "Must capture rook" 
+    @assert length(findall(i->cap_type(i)==Rook,moves)) == 4 "Must capture rook" 
 
     checkFEN = "8/8/R7/pppppppk/5R1R/8/8/7K b - - 1 1"
     board = Boardstate(checkFEN)
     moves = generate_moves(board)
     @assert length(moves) == 1
-    @assert pc_type(moves[1]) == val(Pawn()) "only pawn can capture"
+    @assert pc_type(moves[1]) == Pawn "only pawn can capture"
 end
 test_pawns()
 
@@ -260,7 +260,7 @@ function testEP()
     board = Boardstate(EPfen)
     moves = generate_moves(board)
     @assert length(findall(i->flag(i)==EPFLAG,moves)) == 1 "Can en-passant"
-    kingmv = findfirst(i->pc_type(i)==val(King()),moves)
+    kingmv = findfirst(i->pc_type(i)==King,moves)
     make_move!(moves[kingmv],board)
     @assert board.EnPass == 0 "Should clear EP bitboard"
 
@@ -279,7 +279,7 @@ function testEP()
     newFEN = "k6R/8/8/8/ppppppP1/8/8/7K b - g3 1 1"
     board = Boardstate(newFEN)
     moves = generate_moves(board)
-    @assert length(findall(i->pc_type(i)==val(Pawn()),moves)) == 0 "Can't EP when in check"
+    @assert length(findall(i->pc_type(i)==Pawn,moves)) == 0 "Can't EP when in check"
 
     newFEN = "8/8/8/K1pPr/8/8/8/8 w - c6 1 1"
     board = Boardstate(newFEN)
@@ -292,7 +292,7 @@ function test_attckpcs()
     simpleFEN = "8/p2n4/1K5r/8/8/8/8/6b1 w - - 0 1"
     board = Boardstate(simpleFEN)    
     all_pcs = logic.BBunion(board.pieces)
-    kingpos = LSB(board.pieces[val(King())])
+    kingpos = LSB(board.pieces[King])
 
     checkers = logic.attack_pcs(logic.enemy_pieces(board),all_pcs,kingpos,true)
     @assert checkers == (UInt64(1)<<8)|(UInt64(1)<<11)|(UInt64(1)<<23)|(UInt64(1)<<62) "2 sliding piece attacks, a knight and a pawn"
@@ -454,7 +454,7 @@ function test_legal()
     moves = generate_moves(board)
     @assert length(moves) == 1 "Wknight must capture knight"
     @assert cap_type(moves[1]) > 0
-    @assert pc_type(moves[1]) == val(Knight())
+    @assert pc_type(moves[1]) == Knight
 
     #WKing stalemated in corner
     slidingFEN = "K7/7r/8/8/8/8/8/1r4k1 w - 0 1"
@@ -467,7 +467,7 @@ function test_legal()
     board = Boardstate(slidingFEN)
     moves = generate_moves(board)
     @assert length(moves) == 1 "King moves backwards into check?"
-    @assert pc_type(moves[1]) == val(Bishop())
+    @assert pc_type(moves[1]) == Bishop
 
     #Wking is checkmated as bishop cannot capture rook because pinned by queen
     slidingFEN = "K5Nr/8/8/3B4/8/8/r7/1r5q w - 0 1"
@@ -589,13 +589,13 @@ function test_sliding()
     @assert count(i->(cap_type(i) > 0),moves) == 2
 
     for m in moves
-        if cap_type(m) == val(Rook())
+        if cap_type(m) == Rook
             make_move!(m,board)
         end
     end
     newmoves = generate_moves(board)
     @assert length(newmoves) == 12
-    @assert count(i->(cap_type(i) == val(Queen())),newmoves) == 1
+    @assert count(i->(cap_type(i) == Queen),newmoves) == 1
 end
 test_sliding()
 

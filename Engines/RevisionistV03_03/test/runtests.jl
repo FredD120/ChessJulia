@@ -98,7 +98,7 @@ function test_best()
     best,log = best_move(board,MAXTIME)
 
     moves = generate_moves(board)
-    ind = findfirst(i->cap_type(i)==val(Queen()),moves)
+    ind = findfirst(i->cap_type(i)==Queen,moves)
     @assert best == moves[ind] "Bishop should capture queen as black"
 
     FEN = "k6q/8/8/8/8/8/8/B6K w - - 0 1"
@@ -106,7 +106,7 @@ function test_best()
     best,log = best_move(board,MAXTIME)
 
     moves = generate_moves(board)
-    ind = findfirst(i->cap_type(i)==val(Queen()),moves)
+    ind = findfirst(i->cap_type(i)==Queen,moves)
     @assert best == moves[ind] "Bishop should capture queen as white"
 
     FEN = "k7/8/8/8/8/8/5K2/7q b - - 0 1"

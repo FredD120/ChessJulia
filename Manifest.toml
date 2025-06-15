@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "20dfca225120228e7baf4fc52e9238138a5c52b7"
+project_hash = "6f80305092dfeaacae8448986e7cffd351ecd293"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -507,6 +507,12 @@ deps = ["Profile", "Random", "StaticArrays", "logic"]
 path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV03_03"
 uuid = "303a440e-0551-40af-bd9f-ce36b41a2b46"
 version = "0.3.3"
+
+[[deps.RevisionistV03_04]]
+deps = ["Profile", "Random", "StaticArrays", "logic"]
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV03_04"
+uuid = "304a440e-0551-40af-bd9f-ce36b41a2b46"
+version = "0.3.4"
 
 [[deps.SBC_jll]]
 deps = ["Libdl", "Pkg", "libsndfile_jll"]

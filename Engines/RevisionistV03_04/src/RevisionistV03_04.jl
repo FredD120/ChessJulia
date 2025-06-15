@@ -1,15 +1,15 @@
-module RevisionistV03_03
+module RevisionistV03_04
 
 #=
 INHERIT
 -> Evaluate positions based on piece value and piece square tables
 -> Minimax with alpha beta pruning tree search
 -> Iterative deepening
-
+-> Move ordering: 
+    -PV
 
 NEW
 -> Move ordering: 
-    -PVS
     -MVV-LVA 
     -Killer moves
 -> Quiescence search
@@ -22,7 +22,9 @@ NEW
 using logic
 using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
-       score_moves,sort_moves,triangle_number,copy_PV!,print_PV,MAXDEPTH
+       score_moves,sort_moves,triangle_number,copy_PV!,print_PV,MAXDEPTH,
+       MINCAPSCORE,MAXMOVESCORE
+
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
@@ -40,8 +42,10 @@ mutable struct SearchInfo
     PV_len::UInt8
 end
 
+"Triangle number for an index starting from zero"
 triangle_number(x) = Int(0.5*x*(x+1))
 
+"Constructor for search info struct"
 SearchInfo(t_start,t_max) = SearchInfo(t_start,t_max,NULLMOVE*ones(UInt32,triangle_number(MAXDEPTH)),0)
 
 "find index of PV move at current ply"
@@ -77,15 +81,6 @@ end
 
 Logger() = Logger(0,0,0,0,false)
 
-"Make dictionary of branch cuts more readable"
-function unpack(D::Dict{UInt8,UInt64})
-    vec = zeros(Int,length(D))
-    for (key,val) in D
-        vec[key] = val
-    end
-    vec
-end
-
 "Constant evaluation of stalemate"
 eval(::Draw,depth) = Int32(0)
 "Constant evaluation of being checkmated (favour quicker mates)"
@@ -119,8 +114,29 @@ end
 
 #Score of PV/TT move = 255
 const MAXMOVESCORE = typemax(UInt8)
-#Minimum capture score = 200
-const MINCAPSCORE = MAXMOVESCORE - 55
+#Minimum capture score = 199
+const MINCAPSCORE = MAXMOVESCORE - 56
+
+"""
+Attackers
+↓ Q  R  B  N  P <- Victims
+K 50 40 30 30 10
+Q 51 41 31 31 11
+R 52 42 32 32 12
+B 53 43 33 33 13
+N 53 43 33 33 13
+P 55 45 35 35 15
+"""
+const MV_LV = UInt8[
+    50, 40, 30, 30, 10,
+    51, 41, 31, 31, 11,
+    52, 42, 32, 32, 12,
+    53, 43, 33, 33, 13,
+    53, 43, 33, 33, 13,
+    55, 45, 35, 35, 15]
+
+"lookup value of capture in MVV_LVA table"
+MVV_LVA(victim,attacker) = MINCAPSCORE + MV_LV[5*(attacker-1)+victim-1]
 
 "Sorts moves by associated scores"
 function sort_moves(moves,scores)
@@ -129,12 +145,15 @@ function sort_moves(moves,scores)
 end
 
 "Score moves based on PV, MVV-LVA and killers"
-function score_moves(moves,PV_move::UInt32,isPV::Bool)
+function score_moves(moves,isPV::Bool,PV_move::UInt32=NULLMOVE,killers=[NULLMOVE,NULLMOVE])
     scores = zeros(UInt8,length(moves))
 
     for (i,move) in enumerate(moves)
         if isPV && move == PV_move
             scores[i] = MAXMOVESCORE
+
+        elseif cap_type(move) > 0
+            scores[i] = MVV_LVA(cap_type(move),pc_type(move))
         end
     end
     return scores
@@ -163,7 +182,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     else
         moves = generate_moves(board,legal_info)
         #score and sort moves
-        scores = score_moves(moves,info.PV[ply+1],onPV)
+        scores = score_moves(moves,onPV,info.PV[ply+1])
         moves = sort_moves(moves,scores)
 
         for move in moves
@@ -202,7 +221,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     onPV = true 
 
     #root node is always on PV
-    scores = score_moves(moves,info.PV[ply+1],onPV)
+    scores = score_moves(moves,onPV,info.PV[ply+1])
     moves = sort_moves(moves,scores)
     
     for move in moves
