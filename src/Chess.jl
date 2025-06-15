@@ -1,6 +1,6 @@
 using chessGUI
 using logic
-import RevisionistV03_04 as bot
+import RevisionistV03_05 as bot
 
 const BOTTIME = 0.5
 

@@ -8,7 +8,7 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 0.02
+const MAXTIME = 0.1
 
 "Cumulative data from loggers"
 mutable struct Tracker

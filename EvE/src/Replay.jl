@@ -48,7 +48,7 @@ function fetch_game(E1,E2,match_num,game_num)
 end
 
 function main()
-    FEN,moves = fetch_game("RevisionistV03_02","RevisionistV03_03",1,1)
+    FEN,moves = fetch_game("RevisionistV03_03","RevisionistV03_04",10,2)
 
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
