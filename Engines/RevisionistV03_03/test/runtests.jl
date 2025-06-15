@@ -33,10 +33,16 @@ end
 test_weighting()
 
 function test_triangular()
-    PVtable = Vector{Int}(Int(1):Int(triangle_number(8)))
+    PVtable = zeros(triangle_number(MAXDEPTH))
+    PV_len = MAXDEPTH
+    new_move = 1
+    tri_count = 0
 
-    copy_PV!(PVtable,2,8,0)
-    print_PV(PVtable)
+    for ply in MAXDEPTH-1:-1:0
+        tri_count += 1
+        copy_PV!(PVtable,ply,PV_len,new_move)
+        @assert sum(PVtable) == triangle_number(tri_count)
+    end
 end
 test_triangular()
 

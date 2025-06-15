@@ -641,6 +641,7 @@ end
 test_Zobrist()
 
 function Testing_perft(board::Boardstate,depth)
+    #could also test incremental Zhash updates here
     legal = gameover!(board)
     moves = generate_moves(board,legal)
 

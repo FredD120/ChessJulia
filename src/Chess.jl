@@ -2,7 +2,7 @@ using chessGUI
 using logic
 import RevisionistV03_03 as bot
 
-const BOTTIME = 1
+const BOTTIME = 0.05
 
 "update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
@@ -23,11 +23,11 @@ function mouse_clicked(mouse_pos,legal_moves,kingpos)
     return highlight
 end
 
-function promote_move!(logicstate,index,legal_moves,BOT)
+function promote_move!(logicstate,GUIst,index,legal_moves,BOT)
     promotype = [PROMQUEEN,PROMROOK,PROMBISHOP,PROMKNIGHT]
 
     moveID = findfirst(i->flag(i)==promotype[index],legal_moves)
-    GUImove!(legal_moves[moveID],logicstate,BOT)
+    GUImove!(legal_moves[moveID],logicstate,GUIst,BOT)
 end
 
 "If pawn is promoting, highlight possible promotions to display on GUI"
@@ -44,22 +44,22 @@ function promote_squares(prompos,Whitemove,posit)
 end
 
 "update logic with move made and return true if trying to promote"
-function move_clicked!(logicstate,move_from,mouse_pos,kingpos,legal_moves,BOT)
+function move_clicked!(logicstate,GUIst,move_from,mouse_pos,kingpos,legal_moves,BOT)
     for move in legal_moves
         if (to(move) == mouse_pos) & (from(move) == move_from)
             if (flag(move) == PROMQUEEN)|(flag(move) == PROMROOK)|(flag(move) == PROMBISHOP)|(flag(move) == PROMKNIGHT)
                 return true
             else
-                GUImove!(move,logicstate,BOT)
+                GUImove!(move,logicstate,GUIst,BOT)
                 return false
             end
         #check for castling moves
         elseif move_from == kingpos
             if (mouse_pos == move_from + 2) & (flag(move) == KCASTLE)
-                GUImove!(move,logicstate,BOT)
+                GUImove!(move,logicstate,GUIst,BOT)
                 return false
             elseif (mouse_pos == move_from - 2) & (flag(move) == QCASTLE)
-                GUImove!(move,logicstate,BOT)
+                GUImove!(move,logicstate,GUIst,BOT)
                 return false
             end
         end
@@ -84,11 +84,14 @@ function check_win(logicstate::Boardstate)
 end
     
 "Encapsulates behaviour of PvP vs PvE"
-function GUImove!(move,board,vsBOT)
+function GUImove!(move,board,GUIst,vsBOT)
     make_move!(move,board)
     if vsBOT && !check_win(board)
-        #botmove = bot.best_move(board,moves,UInt8(4),true) #test bot version?
-
+        #JIT compile
+        if GUIst.counter == 0
+            botmove,log = bot.best_move(board,BOTTIME,true)
+            GUIst.counter += 1
+        end
         botmove,log = bot.best_move(board,BOTTIME,true)
         make_move!(botmove,board)
     end
@@ -123,11 +126,11 @@ function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
         if mouse_pos in GUIst.highlight_moves
             if GUIst.promoting
                 index = findfirst(i->i==mouse_pos,GUIst.highlight_moves)
-                promote_move!(logicstate,index,GUIst.legal_moves,vsBOT)
+                promote_move!(logicstate,GUIst,index,GUIst.legal_moves,vsBOT)
                 GUIst.promoting = false
             else
                 #make move in logic then update GUI to reflect new board
-                GUIst.promoting = move_clicked!(logicstate,GUIst.sq_clicked,mouse_pos,kingpos,GUIst.legal_moves,vsBOT)
+                GUIst.promoting = move_clicked!(logicstate,GUIst,GUIst.sq_clicked,mouse_pos,kingpos,GUIst.legal_moves,vsBOT)
             end
 
             if GUIst.promoting
@@ -171,8 +174,9 @@ function main()
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     promoting = false
+    counter = 0
 
-    GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting)
+    GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting,counter)
     
     main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,vsbot)
 end

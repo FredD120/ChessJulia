@@ -2,33 +2,25 @@ using chessGUI
 using logic
 using HDF5
 
-"Track where we are in move list"
-mutable struct Counter
-    count::Int
-end
-
-"Default constructor"
-Counter() = Counter(1)
-
 "tell GUI what to do when button pressed"
-function on_button_press!(logicstate,GUIst,moves,C)
-    if C.count > 1
+function on_button_press!(logicstate,GUIst,moves)
+    if GUIst.counter > 1
         #step backwards in move history
         unmake_move!(logicstate)
         GUIst.position = GUIposition(logicstate)
-        C.count -= 1
+        GUIst.counter -= 1
     else
         println("Beginning of game")
     end
 end
 
 "tell GUI what to do when mouse pressed"
-function on_mouse_press!(evt,square_width,logicstate,GUIst,moves,C)
+function on_mouse_press!(evt,square_width,logicstate,GUIst,moves)
     gameover!(logicstate)
-    if C.count <= length(moves)
-        make_move!(moves[C.count],logicstate)
+    if GUIst.counter <= length(moves)
+        make_move!(moves[GUIst.counter],logicstate)
         GUIst.position = GUIposition(logicstate)
-        C.count += 1
+        GUIst.counter += 1
     else
         println("End of game")
     end
@@ -64,9 +56,10 @@ function main()
     highlight_moves = []    #visualise legal moves for selected piece
     sq_clicked = -1         #position of mouse click in board coords
     promoting = false
+    counter = 0
 
-    GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting)
+    GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting,counter)
 
-    main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,moves,Counter())
+    main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,moves)
 end
 main()

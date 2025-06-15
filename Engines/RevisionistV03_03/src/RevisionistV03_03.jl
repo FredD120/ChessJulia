@@ -22,7 +22,7 @@ NEW
 using logic
 using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
-       score_moves,sort_moves, triangle_number,copy_PV!,print_PV
+       score_moves,sort_moves,triangle_number,copy_PV!,print_PV,MAXDEPTH
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
@@ -174,32 +174,64 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
             #only first search is on PV
             onPV = false
 
+            #cut when upper bound exceeded
+            if α >= β
+                return β
+            end
+
             #update alpha when better score is found
             if score > α
                 α = score
                 #exact score found, must copy up PV from further down the tree
                 copy_PV!(info.PV,ply,info.PV_len,move)
             end
-
-            #cut when upper bound exceeded
-            if α >= β
-                return β
-            end
         end
         return α
     end
 end
 
-"root of minimax with alpha beta pruning"
+"Root of minimax search. Deals in moves not scores"
+function root(board,moves,depth,info::SearchInfo,logger::Logger)
+    #whites current best score
+    α = -INF 
+    #whites current worst score (blacks best score)
+    β = INF
+    player::Int8 = sgn(board.Colour)
+    ply = 0
+    #search PV first
+    onPV = true 
+
+    #root node is always on PV
+    scores = score_moves(moves,info.PV[ply+1],onPV)
+    moves = sort_moves(moves,scores)
+    
+    for move in moves
+        make_move!(move,board)
+        score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
+        unmake_move!(board)
+
+        if logger.stopmidsearch
+            break
+        end
+
+        if score > α
+            copy_PV!(info.PV,ply,info.PV_len,move)
+            α = score
+        end
+        onPV = false
+    end
+    logger.best_score = α
+end
+
+"Run minimax search to fixed depth then increase depth until time runs out"
 function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
+    moves = generate_moves(board)
     depth = 0
     logger = Logger()
     t_start = time()
     info = SearchInfo(t_start,T_MAX)
-    best_move = NULLMOVE
-    player::Int8 = sgn(board.Colour)
 
-    while depth <= MAXDEPTH
+    while depth < MAXDEPTH
         #If we run out of time, cancel next iteration
         if (time() - t_start) > 0.2*T_MAX
             break
@@ -208,21 +240,18 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
         depth += 1
         logger.cur_depth = depth
         info.PV_len = depth
-        #run minimax algorithm to find best score (also keeps track of principle variation)
-        logger.best_score = -minimax(board,-player,-INF,INF,depth,0,true,info,logger)
+        root(board,moves,depth,info,logger)
 
         if logging
-            print_PV(info.PV)
-            #println("Searched to depth = $(logger.cur_depth). PV so far: $([UCImove(m) for m in info.PV[1:info.PV_len]])")
+            println("Searched to depth = $(logger.cur_depth). PV so far: $([UCImove(m) for m in info.PV[1:info.PV_len]])")
         end
-
-        best_move = info.PV[1]
+        
         if !logger.stopmidsearch
             logger.cum_nodes += logger.pos_eval
             logger.pos_eval = 0
         end
     end
-    return best_move, logger
+    return info.PV[1], logger
 end
 
 "Evaluates the position to return the best move"

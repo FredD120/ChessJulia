@@ -14,6 +14,7 @@ mutable struct GUIstate
     highlight_moves::Vector{Integer}
     sq_clicked::Int
     promoting::Bool
+    counter::Int
 end
 
 "initialise window and renderer in SDL"

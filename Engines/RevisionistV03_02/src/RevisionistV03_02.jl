@@ -189,7 +189,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     logger.best_score = α
 end
 
-"root of minimax with alpha beta pruning"
+"Run minimax search to fixed depth then increase depth until time runs out"
 function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
     moves = generate_moves(board)
     depth = 0

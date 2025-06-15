@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.4"
+julia_version = "1.11.5"
 manifest_format = "2.0"
 project_hash = "20dfca225120228e7baf4fc52e9238138a5c52b7"
 
@@ -480,31 +480,31 @@ version = "1.3.1"
 
 [[deps.RevisionistV01]]
 deps = ["Random", "logic"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV01"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV01"
 uuid = "2ba3440e-9551-40af-bd9f-ce36b41a2b46"
 version = "0.0.1"
 
 [[deps.RevisionistV02]]
 deps = ["Profile", "Random", "StaticArrays", "logic"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV02"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV02"
 uuid = "3ba3440e-9551-40af-bd9f-ce36b41a2b46"
 version = "0.2.1"
 
 [[deps.RevisionistV03_01]]
 deps = ["Profile", "Random", "StaticArrays", "logic"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV03_01"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV03_01"
 uuid = "301a440e-0551-40af-bd9f-ce36b41a2b46"
 version = "0.3.1"
 
 [[deps.RevisionistV03_02]]
 deps = ["Profile", "Random", "StaticArrays", "logic"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV03_02"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV03_02"
 uuid = "302a440e-0551-40af-bd9f-ce36b41a2b46"
 version = "0.3.2"
 
 [[deps.RevisionistV03_03]]
 deps = ["Profile", "Random", "StaticArrays", "logic"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\Engines\\RevisionistV03_03"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\Engines\\RevisionistV03_03"
 uuid = "303a440e-0551-40af-bd9f-ce36b41a2b46"
 version = "0.3.3"
 
@@ -736,7 +736,7 @@ version = "1.3.1+1"
 
 [[deps.chessGUI]]
 deps = ["SimpleDirectMediaLayer", "logic"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\chessGUI"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\chessGUI"
 uuid = "01bc330d-9551-40af-bd9f-dd36b4d12b46"
 version = "0.0.1"
 
@@ -825,7 +825,7 @@ version = "1.4.0+0"
 
 [[deps.logic]]
 deps = ["InteractiveUtils", "JLD2", "Profile", "Random", "StaticArrays"]
-path = "C:\\Users\\fwdan\\Julia_Code\\ChessJulia\\logic"
+path = "C:\\Users\\megan\\Documents\\FreddieCode\\ChessJulia\\logic"
 uuid = "71af330d-9551-40af-bd9f-dd36b4d12b46"
 version = "1.1.1"
 
