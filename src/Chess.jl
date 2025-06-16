@@ -158,8 +158,7 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    FEN = "k7/8/8/8/8/2q5/PPPQ4/2KRR3 w - - 0 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
     vsbot = true
     logicstate = Boardstate(FEN)

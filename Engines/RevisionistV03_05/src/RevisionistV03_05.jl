@@ -17,6 +17,10 @@ NEW
 -> Transposition table
 -> Null move pruning
 -> Texel tuned PSTs
+
+TO THINK ABOUT
+#Sometimes we incorrectly think we are getting mated when we run out of time
+#What can we do if we have to cancel a search part way through?
 =#
 
 using logic
@@ -24,7 +28,6 @@ using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
        score_moves,sort_moves,triangle_number,copy_PV!,MAXDEPTH,
        MINCAPSCORE,MAXMOVESCORE,Logger
-
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
@@ -40,13 +43,14 @@ mutable struct SearchInfo
     #Record best moves from root to leaves for move ordering
     PV::Vector{UInt32}
     PV_len::UInt8
+    nodes_since_time::UInt16
 end
 
 "Triangle number for an index starting from zero"
 triangle_number(x) = Int(0.5*x*(x+1))
 
 "Constructor for search info struct"
-SearchInfo(t_start,t_max) = SearchInfo(t_start,t_max,NULLMOVE*ones(UInt32,triangle_number(MAXDEPTH)),0)
+SearchInfo(t_start,t_max) = SearchInfo(t_start,t_max,NULLMOVE*ones(UInt32,triangle_number(MAXDEPTH)),0,0)
 
 "find index of PV move at current ply"
 PV_ind(ply) = Int(ply/2 * (2*MAXDEPTH + 1 - ply))
@@ -154,10 +158,15 @@ end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
 function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info::SearchInfo,logger::Logger)
-    #If we run out of time, return lower bound on score
-    if (time() - info.starttime) > info.maxtime*0.98
-        logger.stopmidsearch = true
-        return α     
+    #reduce number of sys calls
+    info.nodes_since_time += 1
+    if info.nodes_since_time > 500
+        info.nodes_since_time = 0
+        #If we run out of time, return lower bound on score
+        if (time() - info.starttime) > info.maxtime*0.95
+            logger.stopmidsearch = true
+            return α     
+        end
     end
 
     #Evaluate whether we are in a terminal node
@@ -186,13 +195,12 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
             #only first search is on PV
             onPV = false
 
-            #cut when upper bound exceeded
-            if α >= β
-                return β
-            end
-
             #update alpha when better score is found
             if score > α
+                #cut when upper bound exceeded
+                if score >= β
+                    return β
+                end
                 α = score
                 #exact score found, must copy up PV from further down the tree
                 copy_PV!(info.PV,ply,info.PV_len,move)
@@ -232,7 +240,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
         end
         onPV = false
     end
-    logger.best_score = α
+    return α
 end
 
 "Run minimax search to fixed depth then increase depth until time runs out"
@@ -242,17 +250,18 @@ function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
     logger = Logger()
     t_start = time()
     info = SearchInfo(t_start,T_MAX)
+    bestscore = 0
 
     while depth < MAXDEPTH
         #If we run out of time, cancel next iteration
-        if (time() - t_start) > 0.5*T_MAX
+        if (time() - t_start) > 0.2*T_MAX
             break
         end
 
         depth += 1
         logger.cur_depth = depth
         info.PV_len = depth
-        root(board,moves,depth,info,logger)
+        bestscore = root(board,moves,depth,info,logger)
 
         logger.PV = PV_string(info)
         if verbose
@@ -262,6 +271,7 @@ function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
         if !logger.stopmidsearch
             logger.cum_nodes += logger.pos_eval
             logger.pos_eval = 0
+            logger.bestscore = bestscore 
         end
     end
 
