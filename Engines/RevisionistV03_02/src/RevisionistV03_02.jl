@@ -209,7 +209,7 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
         root(board,moves,depth,info,logger)
 
         if logging
-            println("Searched to depth = $(logger.cur_depth). Best move so far: [$(UCImove(info.best_mv))]")
+            println("Searched to depth = $(logger.cur_depth). Best move so far: [$(LONGmove(info.best_mv))]")
         end
         #we are not currently searching full PV so not safe to adopt move from partial search
         if !logger.stopmidsearch

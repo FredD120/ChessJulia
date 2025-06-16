@@ -22,15 +22,15 @@ NEW
 using logic
 using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
-       score_moves,sort_moves,triangle_number,copy_PV!,print_PV,MAXDEPTH,
-       MINCAPSCORE,MAXMOVESCORE
+       score_moves,sort_moves,triangle_number,copy_PV!,MAXDEPTH,
+       MINCAPSCORE,MAXMOVESCORE,Logger
 
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
 
 #maximum search depth
-const MAXDEPTH::UInt8 = UInt8(8)
+const MAXDEPTH::UInt8 = UInt8(12)
 const MINDEPTH::UInt8 = UInt8(0)
 
 mutable struct SearchInfo
@@ -60,16 +60,8 @@ function copy_PV!(triangle_PV,ply,PV_len,move)
     end
 end
 
-"display triangular table"
-function print_PV(PV)
-    for i in 0:MAXDEPTH-1
-        if typeof(PV[1]) == UInt32
-            println([UCImove(m) for m in PV[PV_ind(i)+1:PV_ind(i)+MAXDEPTH-i]])
-        else
-            println([m for m in PV[PV_ind(i)+1:PV_ind(i)+MAXDEPTH-i]])
-        end
-    end
-end
+"return PV as string"
+PV_string(info::SearchInfo) = "$([LONGmove(m) for m in info.PV[1:info.PV_len]])"
 
 mutable struct Logger
     best_score::Int32
@@ -77,9 +69,10 @@ mutable struct Logger
     cum_nodes::Int32
     cur_depth::UInt8
     stopmidsearch::Bool
+    PV::String
 end
 
-Logger() = Logger(0,0,0,0,false)
+Logger() = Logger(0,0,0,0,false,"")
 
 "Constant evaluation of stalemate"
 eval(::Draw,depth) = Int32(0)
@@ -162,7 +155,7 @@ end
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
 function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info::SearchInfo,logger::Logger)
     #If we run out of time, return lower bound on score
-    if (time() - info.starttime) > info.maxtime
+    if (time() - info.starttime) > info.maxtime*0.98
         logger.stopmidsearch = true
         return α     
     end
@@ -243,7 +236,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
 end
 
 "Run minimax search to fixed depth then increase depth until time runs out"
-function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
+function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
     moves = generate_moves(board)
     depth = 0
     logger = Logger()
@@ -252,7 +245,7 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
 
     while depth < MAXDEPTH
         #If we run out of time, cancel next iteration
-        if (time() - t_start) > 0.2*T_MAX
+        if (time() - t_start) > 0.5*T_MAX
             break
         end
 
@@ -261,8 +254,9 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
         info.PV_len = depth
         root(board,moves,depth,info,logger)
 
-        if logging
-            println("Searched to depth = $(logger.cur_depth). PV so far: $([UCImove(m) for m in info.PV[1:info.PV_len]])")
+        logger.PV = PV_string(info)
+        if verbose
+            println("Searched to depth = $(logger.cur_depth). PV so far: "*logger.PV)
         end
         
         if !logger.stopmidsearch
@@ -270,6 +264,7 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
             logger.pos_eval = 0
         end
     end
+
     return info.PV[1], logger
 end
 
@@ -282,7 +277,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
     best_move != NULLMOVE || error("Failed to find move better than null move")
 
     if logging
-        println("Best move = $(UCImove(best_move)). Move score = $(logger.best_score). Evaluated $(logger.cum_nodes) positions. Reached depth $((logger.cur_depth)). Time taken: $(round(δt,sigdigits=6))s.)")
+        println("Best move = $(LONGmove(best_move)). Move score = $(logger.best_score). Evaluated $(logger.cum_nodes) positions. Reached depth $((logger.cur_depth)). Time taken: $(round(δt,sigdigits=6))s.)")
         if logger.stopmidsearch
             println("Ran out of time mid search.")
         end

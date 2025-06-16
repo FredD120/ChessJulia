@@ -56,16 +56,8 @@ function copy_PV!(triangle_PV,ply,PV_len,move)
     end
 end
 
-"display triangular table"
-function print_PV(PV)
-    for i in 0:MAXDEPTH-1
-        if typeof(PV[1]) == UInt32
-            println([UCImove(m) for m in PV[PV_ind(i)+1:PV_ind(i)+MAXDEPTH-i]])
-        else
-            println([m for m in PV[PV_ind(i)+1:PV_ind(i)+MAXDEPTH-i]])
-        end
-    end
-end
+"return PV as string"
+PV_string(info::SearchInfo) = "$([LONGmove(m) for m in info.PV[1:info.PV_len]])"
 
 mutable struct Logger
     best_score::Int32
@@ -73,9 +65,10 @@ mutable struct Logger
     cum_nodes::Int32
     cur_depth::UInt8
     stopmidsearch::Bool
+    PV::String
 end
 
-Logger() = Logger(0,0,0,0,false)
+Logger() = Logger(0,0,0,0,false,"")
 
 "Make dictionary of branch cuts more readable"
 function unpack(D::Dict{UInt8,UInt64})
@@ -242,8 +235,9 @@ function iterative_deepening(board::Boardstate,T_MAX,logging::Bool)
         info.PV_len = depth
         root(board,moves,depth,info,logger)
 
+        logger.PV = PV_string(info)
         if logging
-            println("Searched to depth = $(logger.cur_depth). PV so far: $([UCImove(m) for m in info.PV[1:info.PV_len]])")
+            println("Searched to depth = $(logger.cur_depth). PV so far: "*logger.PV)
         end
         
         if !logger.stopmidsearch
@@ -263,7 +257,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
     best_move != NULLMOVE || error("Failed to find move better than null move")
 
     if logging
-        println("Best move = $(UCImove(best_move)). Move score = $(logger.best_score). Evaluated $(logger.cum_nodes) positions. Reached depth $((logger.cur_depth)). Time taken: $(round(δt,sigdigits=6))s.)")
+        println("Best move = $(LONGmove(best_move)). Move score = $(logger.best_score). Evaluated $(logger.cum_nodes) positions. Reached depth $((logger.cur_depth)). Time taken: $(round(δt,sigdigits=6))s.)")
         if logger.stopmidsearch
             println("Ran out of time mid search.")
         end

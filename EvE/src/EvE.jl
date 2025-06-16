@@ -1,5 +1,5 @@
 import RevisionistV03_03 as bot1
-import RevisionistV03_04 as bot2
+import RevisionistV03_05 as bot2
 using logic
 using HDF5
 
@@ -8,17 +8,47 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 0.1
+const MAXTIME = 0.6
 
-"Cumulative data from loggers"
+"Cumulative data from loggers for whole match"
 mutable struct Tracker
-    depth::Int64
-    turns::Int64
-    q_branch::Float64
+    depth_P1::Int64
+    turns_P1::Int64
+    branch_P1::Float64
+
+    depth_P2::Int64
+    turns_P2::Int64
+    branch_P2::Float64
+
+    PV_P1_G1::Vector{String}
+    eval_P1_G1::Vector{Int}
+    PV_P1_G2::Vector{String}
+    eval_P1_G2::Vector{Int}
+
+    PV_P2_G1::Vector{String}
+    eval_P2_G1::Vector{Int}
+    PV_P2_G2::Vector{String}
+    eval_P2_G2::Vector{Int}
+
+    moves_G1::Vector{UInt32}
+    moves_G2::Vector{UInt32}
+    outcome_G1::String
+    outcome_G2::String
 end
 
-"Default constructor for tracking data"
-Tracker() = Tracker(0,0,0)
+"constructor for tracker. info is filled in after game"
+Tracker() = Tracker(0,0,0,0,0,0,
+            [],[],[],[],[],[],[],[],
+            [],[],"","")
+
+"constructor for analysis data from engine"
+function Analysis(log::Union{bot1.Logger,bot2.Logger}) 
+    prinV = ""
+    try prinV = log.PV
+    catch;end
+
+    (prinV,log.best_score)
+end
 
 "Report whose turn it is"
 turn_colour(ID) = ifelse(ID==0,"White","Black")
@@ -55,23 +85,39 @@ function evaluate_game!(score,board,side_colour)
 end
 
 "Play a game bot vs bot - modifies boardstate"
-function play_game!(board,player,trackers,move_log)
+function play_game!(board,player,log_moves::Bool)
     ind = 0
     moves = UInt32[]
     sizehint!(moves,100)
+
+    P1_PV = String[]
+    P2_PV = String[]
+    P1_eval = Int[]
+    P2_eval = Int[]
+
+    PVs = [P1_PV,P2_PV]
+    Evals = [P1_eval,P2_eval]
+    trk_turns = [0,0]
+    trk_depth = [0,0]
+    trk_branch = [0.0,0.0]
     while board.State == Neutral()
         move,log = player.best_move(board,MAXTIME)
         push!(moves,move)
-        trackers[ind+1].turns += 1
+
+        trk_turns[ind+1] += 1
+
+        PV,eval = Analysis(log)
+        push!(PVs[ind+1],PV)
+        push!(Evals[ind+1],eval)
         
         depth = log.cur_depth
         if log.stopmidsearch
             depth -= 1
         end
-        trackers[ind+1].depth += depth
-        trackers[ind+1].q_branch += log.cum_nodes ^ (1/depth)
+        trk_depth[ind+1] += depth
+        trk_branch[ind+1] += log.cum_nodes ^ (1/depth)
 
-        if move_log
+        if log_moves
             #println("Playing move: $(UCImove(move)) as $(turn_colour(board.Colour)). Reached depth $(log.cur_depth)")
             println("$move,")
         end
@@ -82,68 +128,126 @@ function play_game!(board,player,trackers,move_log)
         ind = (ind + 1) % 2
         gameover!(board)
     end
-    return moves
+    return moves,PVs,Evals,trk_turns,trk_depth,trk_branch
 end
 
 "Play a match, both players play a position from both sides - modifies running score totals"
-function match!(score,FEN,P1_track,P2_track,log_moves=false)
+function match!(score,FEN,log_moves=false)
+    track = Tracker()
 
     game1 = Boardstate(FEN)
-    moves1 = play_game!(game1,bot1,[P1_track,P2_track],log_moves)
-    outcome1 = evaluate_game!(score,game1,white)
+    moves,PVs,Evals,trk_turns,trk_depth,trk_branch = play_game!(game1,bot1,log_moves)
+    outcome = evaluate_game!(score,game1,white)
+
+    track.depth_P1 += trk_depth[1]
+    track.turns_P1 += trk_turns[1]
+    track.branch_P1 += trk_branch[1]
+
+    track.depth_P2 += trk_depth[2]
+    track.turns_P2 += trk_turns[2]
+    track.branch_P2 += trk_branch[2]
+
+    track.PV_P1_G1 = PVs[1]
+    track.PV_P2_G1 = PVs[2]
+    track.eval_P1_G1 = Evals[1]
+    track.eval_P2_G1 = Evals[2]
+
+    track.moves_G1 = moves
+    track.outcome_G1 = outcome
 
     game2 = Boardstate(FEN)
-    moves2 = play_game!(game2,bot2,[P2_track,P1_track],log_moves)
-    outcome2 = evaluate_game!(score,game2,black)
+    moves,PVs,Evals,trk_turns,trk_depth,trk_branch = play_game!(game2,bot2,log_moves)
+    outcome = evaluate_game!(score,game2,black)
 
-    return moves1,moves2,outcome1,outcome2
+    track.depth_P1 += trk_depth[2]
+    track.turns_P1 += trk_turns[2]
+    track.branch_P1 += trk_branch[2]
+
+    track.depth_P2 += trk_depth[1]
+    track.turns_P2 += trk_turns[1]
+    track.branch_P2 += trk_branch[1]
+
+    track.PV_P1_G2 = PVs[2]
+    track.PV_P2_G2 = PVs[1]
+    track.eval_P1_G2 = Evals[2]
+    track.eval_P2_G2 = Evals[1]
+
+    track.moves_G2 = moves
+    track.outcome_G2 = outcome
+
+    return track
 end
 
 "Get FEN strings and play from those positions from both sides. Report score and average depth searched"
 function main()
     #Win, draw, loss of player 1
     score = [0,0,0]
-    P1_track = Tracker()
-    P2_track = Tracker()
 
     FENstrings = get_FENs()
 
     name = "$(bot1)__VS__$(bot2).h5"
     path = "$(dirname(@__DIR__))/results/$name"
 
-    total_time = 0
+    trackers = Vector{Tracker}(undef,length(FENstrings))
+    t = time()
+    Threads.@threads for (game_num,FEN) in collect(enumerate(FENstrings))
+        println("Playing FEN: $FEN")
+        trackers[game_num] = match!(score,FEN)
+    end
+    total_time = time() - t
+
+    P1_track_depth = 0
+    P1_track_turns = 0
+    P1_track_branch = 0
+
+    P2_track_depth = 0
+    P2_track_turns = 0
+    P2_track_branch = 0
 
     h5open(path,"w") do fid
         results = create_group(fid,"results")
 
-        t = time()
-        game_num = 0
-        for FEN in FENstrings
-            game_num += 1
-            println("Playing FEN: $FEN")
-            moves1,moves2,outcome1,outcome2 = match!(score,FEN,P1_track,P2_track)
+        for (game_num,track) in enumerate(trackers)
             Match = create_group(fid,"match $game_num")
-            Match["Game 1 moves"] = moves1
-            Match["Game 2 moves"] = moves2
-            HDF5.attributes(Match)["Result 1"] = outcome1
-            HDF5.attributes(Match)["Result 2"] = outcome2
-            HDF5.attributes(Match)["FEN string"] = FEN
-        end
-        total_time = time() - t
+            Match["Game 1 moves"] = track.moves_G1
+            Match["Game 2 moves"] = track.moves_G2
 
-        results["P1 avg depth"] = P1_track.depth/P1_track.turns
-        results["P2 avg depth"] = P2_track.depth/P2_track.turns
-        results["P1 avg branch factor"] = P1_track.q_branch/P1_track.turns
-        results["P2 avg branch factor"] = P2_track.q_branch/P2_track.turns
+            Match["Game 1 P1 Eval"] = track.eval_P1_G1
+            Match["Game 1 P2 Eval"] = track.eval_P2_G1
+            Match["Game 1 P1 PV"] = track.PV_P1_G1
+            Match["Game 1 P2 PV"] = track.PV_P2_G1
+
+            Match["Game 2 P1 Eval"] = track.eval_P1_G2
+            Match["Game 2 P2 Eval"] = track.eval_P2_G2
+            Match["Game 2 P1 PV"] = track.PV_P1_G2
+            Match["Game 2 P2 PV"] = track.PV_P2_G2
+
+            HDF5.attributes(Match)["Result 1"] = track.outcome_G1
+            HDF5.attributes(Match)["Result 2"] = track.outcome_G2
+            HDF5.attributes(Match)["FEN string"] = FENstrings[game_num]
+
+            P1_track_depth += track.depth_P1
+            P1_track_turns += track.turns_P1
+            P1_track_branch += track.branch_P1
+
+            P2_track_depth += track.depth_P2
+            P2_track_turns += track.turns_P2
+            P2_track_branch += track.branch_P2
+        end
+
+        results["P1 avg depth"] = P1_track_depth/P1_track_turns
+        results["P2 avg depth"] = P2_track_depth/P2_track_turns
+        results["P1 avg branch factor"] = P1_track_branch/P1_track_turns
+        results["P2 avg branch factor"] = P2_track_branch/P2_track_turns
         results["Final score [W:D:L]"] = score
         results["Thinking time (seconds)"] = MAXTIME
         results["Total time"] = total_time
     end
 
-    println("Player 1 avg depth = $(P1_track.depth/P1_track.turns)")
-    println("Player 2 avg depth = $(P2_track.depth/P2_track.turns)")
-    println("Player 1 avq branches = $(P1_track.q_branch/P1_track.turns)")
-    println("Player 2 avq branches = $(P2_track.q_branch/P2_track.turns)")
+    println("Player 1 avg depth = $(P1_track_depth/P1_track_turns)")
+    println("Player 2 avg depth = $(P2_track_depth/P2_track_turns)")
+    println("Player 1 avq branches = $(P1_track_branch/P1_track_turns)")
+    println("Player 2 avq branches = $(P2_track_branch/P2_track_turns)")
     println("Final score was: $score. Took $(total_time) seconds.")
 end
 main()

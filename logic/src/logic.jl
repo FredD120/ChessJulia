@@ -2,13 +2,10 @@ module logic
 
 ###TO THINK ABOUT###
 
-#Is EPcount,halfmovecount or castlecount occasionally exceeding 256?
-
 ###FEATURES###
-#Test whether in check (Bool) for check extensions (or just reference legal_info)
-#Test for check/stale-mate as a seperate function
 
 ###OPTIMISATIONS###
+#Create move struct with move UInt32 and score of move
 
 ###REFACTOR###
 #Separate move_gen and boardstate/move making into different files
@@ -20,7 +17,7 @@ To check generated code:
 @code_warntype
 =#
 
-export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove,
+export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove, LONGmove,
 Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
 King, Queen, Rook, Bishop, Knight, Pawn, white, black, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
@@ -42,6 +39,18 @@ const Rook = UInt8(3)
 const Bishop = UInt8(4)
 const Knight = UInt8(5)
 const Pawn = UInt8(6)
+
+const FENdict = Dict('K'=>King,'Q'=>Queen,'R'=>Rook,'B'=>Bishop,'N'=>Knight,'P'=>Pawn)
+
+"return letter associated with piecetype index"
+function piece_letter(p::UInt8)
+    for (k,v) in FENdict
+        if p==v
+            return k
+        end
+    end
+    return ""
+end
 
 "Iterating through singleton piecetypes. Can cause type instability"
 const piecetypes = [King,Queen,Rook,Bishop,Knight,Pawn]
@@ -124,6 +133,9 @@ to(move::UInt32) = UInt8((move >> TOSHIFT) & LOCMASK)
 cap_type(move::UInt32) = UInt8((move >> CAPSHIFT) & PIECEMASK)
 flag(move::UInt32) = UInt8((move >> FLAGSHIFT) & FLAGMASK)
 
+"return true if move captures a piece"
+iscapture(move::UInt32) = cap_type(move) > 0
+
 function unpack_move(move::UInt32)
     mv_pc_type = pc_type(move)
     mv_from = from(move)
@@ -133,6 +145,7 @@ function unpack_move(move::UInt32)
     (mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag)
 end
 
+"construct move 'struct' as a UInt32"
 function Move(pc_type::UInt8,from::UInt8,to::UInt8,cap_type::UInt8,flag::UInt8)::UInt32
     UInt32(pc_type) |
     (UInt32(from) << FROMSHIFT) |
@@ -417,7 +430,6 @@ function Boardstate(FEN)
     MoveHistory = Vector{UInt32}()
     rank = nothing
     file = nothing
-    FENdict = Dict('K'=>King,'Q'=>Queen,'R'=>Rook,'B'=>Bishop,'N'=>Knight,'P'=>Pawn)
 
     #Keep track of where we are on chessboard
     i = UInt32(0)         
@@ -492,11 +504,32 @@ function UCIpos(pos)
     return ('a'+file)*string(Int(rank))
 end
 
-"convert a move to UCI notation"
+"convert a move to UCI notation - incorrect on castling (should be king moving) and promotions (should indicate piece promote type)"
 function UCImove(move::UInt32)
     F = UCIpos(from(move))
     T = UCIpos(to(move))
     return F*T
+end
+
+"convert a move to long algebraic notation for clarity"
+function LONGmove(move::UInt32)
+    flg = flag(move)
+    if flg == KCASTLE
+        return "O-O"
+    elseif flg == QCASTLE
+        return "O-O-O"
+    else
+        F = UCIpos(from(move))
+        T = UCIpos(to(move))
+        P = piece_letter(pc_type(move))
+        mid = "-"
+        if cap_type(move) > 0
+            mid = "x"
+        end
+
+        promote = piece_letter(promote_type(flg))
+        return P*F*mid*T*promote
+    end
 end
 
 "Masked 4-bit integer representing king- and queen-side castling rights for one side"
@@ -1292,6 +1325,7 @@ function promote_type(flag)
     elseif flag == PROMKNIGHT
         return Knight
     end
+    return NULL_PIECE
 end
 
 "Returns location of en-passant and also pawn being captured by en-passant"
@@ -1300,13 +1334,6 @@ EPlocation(colour::UInt8,moveloc) = ifelse(colour==0,moveloc+8,moveloc-8)
 "modify boardstate by making a move. increment halfmove count. add move to MoveHist. update castling rights"
 function make_move!(move::UInt32,board::Boardstate)
     mv_pc_type,mv_from,mv_to,mv_cap_type,mv_flag = unpack_move(move::UInt32)
-
-    #=
-    if board.Data.CastleCount[end] > 100
-        println("Castle count = $(board.Data.CastleCount[end])")
-        error("Castle")
-    end
-    =#
 
     #0 = white, 1 = black
     ColId = ColID(board.Colour)
@@ -1485,7 +1512,7 @@ function perft(board::Boardstate,depth,verbose=false)
             make_move!(move,board)
             nodecount = perft(board,depth-1)
             if verbose == true
-             println(UCImove(move) * ": " * string(nodecount))
+             println(LONGmove(move) * ": " * string(nodecount))
             end
             leaf_nodes += nodecount
             unmake_move!(board)

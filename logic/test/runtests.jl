@@ -579,6 +579,13 @@ function test_UCI()
 end
 test_UCI()
 
+function test_longmv()
+    move = Move(UInt8(1),UInt8(2),UInt8(54),UInt8(2),UInt8(0))
+    mvstr = LONGmove(move)
+    @assert mvstr == "Kc8xg2"
+end
+test_longmv()
+
 "check all sliding attacks and quiets are generated correctly, not including checks"
 function test_sliding()
     slidingFEN = "Q6r/8/2K5/8/8/8/8/b2k3 w - 0 1"
