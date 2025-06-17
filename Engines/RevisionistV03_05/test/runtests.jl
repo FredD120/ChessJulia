@@ -51,15 +51,15 @@ function test_MVVLVA()
     board = Boardstate(FEN)
     moves = generate_moves(board)
 
-    scores = score_moves(moves,false)
+    score_moves!(moves,false)
     
-    for (move,score) in zip(moves,scores)
+    for move in moves
         if cap_type(move) == Queen
-            @assert score == maximum(scores)
-            @assert score > MINCAPSCORE
+            @assert score(move) == maximum(scores)
+            @assert score(move) > MINCAPSCORE
         elseif cap_type(move) == logic.NULL_PIECE
-            @assert score == minimum(scores)
-            @assert score < MINCAPSCORE
+            @assert score(move) == minimum(scores)
+            @assert score(move) < MINCAPSCORE
         end
     end
 end
@@ -99,15 +99,16 @@ end
 test_positional()
 
 function test_ordering()
-    FEN = "K7/R7/R7/8/8/8/8/7k w - - 0 1"
-    board = Boardstate(FEN)
-    moves = generate_moves(board)
+    moves = [NULLMOVE,NULLMOVE,NULLMOVE]
 
-    best_move = moves[10]
-    scores = score_moves(moves,true,best_move)
-    moves = sort_moves(moves,scores)
+    for i in eachindex(moves)
+        moves[i] = set_score(moves[i],UInt8(i))
+    end
 
-    @assert moves[1] == best_move "Current best move should be played first"
+    for i in eachindex(moves)
+        next_best!(moves,i)
+        @assert score(moves[i]) == 4-i
+    end
 end
 test_ordering()
 
@@ -116,25 +117,19 @@ function test_best()
     board = Boardstate(FEN)
     best,log = best_move(board,MAXTIME)
 
-    moves = generate_moves(board)
-    ind = findfirst(i->cap_type(i)==Queen,moves)
-    @assert best == moves[ind] "Bishop should capture queen as black"
+    @assert LONGmove(best) == "Ba1xh8" "Bishop should capture queen as black"
 
     FEN = "k6q/8/8/8/8/8/8/B6K w - - 0 1"
     board = Boardstate(FEN)
     best,log = best_move(board,MAXTIME)
 
-    moves = generate_moves(board)
-    ind = findfirst(i->cap_type(i)==Queen,moves)
-    @assert best == moves[ind] "Bishop should capture queen as white"
+    @assert LONGmove(best) == "Ba1xh8" "Bishop should capture queen as white"
 
     FEN = "k7/8/8/8/8/8/5K2/7q b - - 0 1"
     board = Boardstate(FEN)
     best,log = best_move(board,MAXTIME)
 
-    moves = generate_moves(board)
-    ind = findfirst(i->to(i)==62,moves)
-    @assert best != moves[ind] "Queen should not allow itself to be captured"
+    @assert LONGmove(best) == "Qh1-e4" "Queen should not allow itself to be captured"
 end
 test_best()
 

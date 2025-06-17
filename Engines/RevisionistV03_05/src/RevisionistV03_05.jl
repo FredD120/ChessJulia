@@ -26,8 +26,8 @@ TO THINK ABOUT
 using logic
 using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
-       score_moves,sort_moves,triangle_number,copy_PV!,MAXDEPTH,
-       MINCAPSCORE,MAXMOVESCORE,Logger
+       triangle_number,copy_PV!,MAXDEPTH,MINCAPSCORE,MAXMOVESCORE,
+       Logger,swap!,next_best!,score_moves!
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
@@ -110,9 +110,9 @@ function evaluate(board::Boardstate)::Int32
 end
 
 #Score of PV/TT move = 255
-const MAXMOVESCORE = typemax(UInt8)
+const MAXMOVESCORE::UInt8 = typemax(UInt8)
 #Minimum capture score = 199
-const MINCAPSCORE = MAXMOVESCORE - 56
+const MINCAPSCORE::UInt8 = MAXMOVESCORE - 56
 
 """
 Attackers
@@ -133,27 +133,43 @@ const MV_LV = UInt8[
     55, 45, 35, 35, 15]
 
 "lookup value of capture in MVV_LVA table"
-MVV_LVA(victim,attacker) = MINCAPSCORE + MV_LV[5*(attacker-1)+victim-1]
+MVV_LVA(victim,attacker)::UInt8 = MINCAPSCORE + MV_LV[5*(attacker-1)+victim-1]
 
-"Sorts moves by associated scores"
-function sort_moves(moves,scores)
-    permute = sortperm(scores,rev=true)
-    return moves[permute]
+"swap the positions of two entries in a vector"
+function swap!(list,ind1,ind2)
+    temp = list[ind1]
+    list[ind1] = list[ind2]
+    list[ind2] = temp
+end
+
+"iterates through scores and swaps next best score and move to top of list"
+function next_best!(moves,cur_ind)
+    len = length(moves)
+    if cur_ind < len
+        cur_best_score = 0
+        cur_best_ind = cur_ind
+
+        for i in cur_ind:len
+            score_i = score(moves[i])
+            if score_i > cur_best_score
+                cur_best_score = score_i
+                cur_best_ind = i 
+            end
+        end
+        swap!(moves,cur_ind,cur_best_ind)
+    end
 end
 
 "Score moves based on PV, MVV-LVA and killers"
-function score_moves(moves,isPV::Bool,PV_move::UInt32=NULLMOVE,killers=[NULLMOVE,NULLMOVE])
-    scores = zeros(UInt8,length(moves))
-
+function score_moves!(moves,isPV::Bool,PV_move::UInt32=NULLMOVE,killers=[NULLMOVE,NULLMOVE])
     for (i,move) in enumerate(moves)
         if isPV && move == PV_move
-            scores[i] = MAXMOVESCORE
+            moves[i] = set_score(move,MAXMOVESCORE)
 
-        elseif cap_type(move) > 0
-            scores[i] = MVV_LVA(cap_type(move),pc_type(move))
+        elseif iscapture(move)
+            moves[i] = set_score(move,MVV_LVA(cap_type(move),pc_type(move)))
         end
     end
-    return scores
 end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"
@@ -161,12 +177,12 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     #reduce number of sys calls
     info.nodes_since_time += 1
     if info.nodes_since_time > 500
-        info.nodes_since_time = 0
         #If we run out of time, return lower bound on score
         if (time() - info.starttime) > info.maxtime*0.95
             logger.stopmidsearch = true
             return α     
         end
+        info.nodes_since_time = 0
     end
 
     #Evaluate whether we are in a terminal node
@@ -183,11 +199,12 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
         
     else
         moves = generate_moves(board,legal_info)
-        #score and sort moves
-        scores = score_moves(moves,onPV,info.PV[ply+1])
-        moves = sort_moves(moves,scores)
+        score_moves!(moves,onPV,info.PV[ply+1])
 
-        for move in moves
+        for i in eachindex(moves)
+            next_best!(moves,i)
+            move = moves[i]
+
             make_move!(move,board)
             score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
             unmake_move!(board)
@@ -218,14 +235,16 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     β = INF
     player::Int8 = sgn(board.Colour)
     ply = 0
-    #search PV first
+    #search PV first, only if it exists
     onPV = true 
 
     #root node is always on PV
-    scores = score_moves(moves,onPV,info.PV[ply+1])
-    moves = sort_moves(moves,scores)
-    
-    for move in moves
+    score_moves!(moves,onPV,info.PV[ply+1])
+
+    for i in eachindex(moves)
+        next_best!(moves,i)
+        move = moves[i]
+
         make_move!(move,board)
         score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
         unmake_move!(board)
@@ -271,7 +290,7 @@ function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
         if !logger.stopmidsearch
             logger.cum_nodes += logger.pos_eval
             logger.pos_eval = 0
-            logger.bestscore = bestscore 
+            logger.best_score = bestscore 
         end
     end
 

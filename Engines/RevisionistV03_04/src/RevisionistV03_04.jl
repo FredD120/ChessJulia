@@ -158,12 +158,12 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     #reduce number of sys calls
     info.nodes_since_time += 1
     if info.nodes_since_time > 500
-        info.nodes_since_time = 0
         #If we run out of time, return lower bound on score
         if (time() - info.starttime) > info.maxtime*0.95
             logger.stopmidsearch = true
             return α     
         end
+        info.nodes_since_time = 0
     end
 
     #Evaluate whether we are in a terminal node
@@ -192,12 +192,13 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
             #only first search is on PV
             onPV = false
 
+            #cut when upper bound exceeded
+            if score >= β
+                return β
+            end
+
             #update alpha when better score is found
             if score > α
-                #cut when upper bound exceeded
-                if score >= β
-                    return β
-                end
                 α = score
                 #exact score found, must copy up PV from further down the tree
                 copy_PV!(info.PV,ply,info.PV_len,move)

@@ -23,7 +23,7 @@ King, Queen, Rook, Bishop, Knight, Pawn, white, black, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
-ColourPieceID, generate_attacks, gameover!,Opposite
+ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score
 
 using InteractiveUtils
 using JLD2
@@ -115,16 +115,19 @@ This can be packed into a UInt32
 const PIECEMASK = 0x7
 const LOCMASK   = 0x3F
 const FLAGMASK = 0xF
+const SCOREMASK = 0xFF
 
 const TYPESIZE = 3
 const FROMSIZE = 6
 const TOSIZE   = 6
 const CAPSIZE  = 3
+const FLAGSIZE = 4
 
 const FROMSHIFT = TYPESIZE
 const TOSHIFT   = TYPESIZE + FROMSIZE
 const CAPSHIFT  = TYPESIZE + FROMSIZE + TOSIZE
 const FLAGSHIFT = TYPESIZE + FROMSIZE + TOSIZE + CAPSIZE
+const SCORESHIFT = TYPESIZE + FROMSIZE + TOSIZE + CAPSIZE + FLAGSIZE
 
 "Mask and shift UInt32 to unpack move data"
 pc_type(move::UInt32) = UInt8(move & PIECEMASK)
@@ -132,6 +135,10 @@ from(move::UInt32) = UInt8((move >> FROMSHIFT) & LOCMASK)
 to(move::UInt32) = UInt8((move >> TOSHIFT) & LOCMASK)
 cap_type(move::UInt32) = UInt8((move >> CAPSHIFT) & PIECEMASK)
 flag(move::UInt32) = UInt8((move >> FLAGSHIFT) & FLAGMASK)
+score(move::UInt32) = UInt8((move >> SCORESHIFT) & SCOREMASK)
+
+"Return move with score set"
+set_score(move::UInt32,score::UInt8) = move | (UInt32(score) << SCORESHIFT)
 
 "return true if move captures a piece"
 iscapture(move::UInt32) = cap_type(move) > 0
@@ -146,17 +153,16 @@ function unpack_move(move::UInt32)
 end
 
 "construct move 'struct' as a UInt32"
-function Move(pc_type::UInt8,from::UInt8,to::UInt8,cap_type::UInt8,flag::UInt8)::UInt32
+function Move(pc_type::UInt8,from::UInt8,to::UInt8,cap_type::UInt8,flag::UInt8,score=UInt8(0))::UInt32
     UInt32(pc_type) |
     (UInt32(from) << FROMSHIFT) |
     (UInt32(to) << TOSHIFT) |
     (UInt32(cap_type) << CAPSHIFT) | 
-    (UInt32(flag) << FLAGSHIFT)
+    (UInt32(flag) << FLAGSHIFT) |
+    (UInt32(score) << SCORESHIFT)
 end
 
 const NULLMOVE = Move(UInt8(0),UInt8(0),UInt8(0),UInt8(0),UInt8(0))
-
-Base.show(io::IO,m::UInt32) = println(io,"From=$(Int(from(m))); To=$(Int(to(m))); PieceId=$(Int(pc_type(m))); Capture ID=$(Int(cap_type(m))); Flag=$(Int(flag(m)))")
 
 "take in all possible moves as a bitboard for a given piece from a txt file"
 function read_txt(filename)
