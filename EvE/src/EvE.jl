@@ -1,5 +1,5 @@
-import RevisionistV03_04 as bot1
-import RevisionistV03_05 as bot2
+import RevisionistV03_05 as bot1
+import RevisionistV03_06 as bot2
 using logic
 using HDF5
 
@@ -8,7 +8,7 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 0.2
+const MAXTIME = 0.5
 
 "Cumulative data from loggers for whole match"
 mutable struct Tracker
@@ -66,17 +66,17 @@ function get_FENs()
 end
 
 "Figure out which bot won and update score accordingly"
-function evaluate_game!(score,board,side_colour)
+function evaluate_game!(score,board,P1_side)
     str = ""
     if board.State == Draw()
         score[2] += 1
         str = "Draw"
     else
-        if board.Colour == side_colour
-            str = "$(turn_colour(Opposite(side_colour))) Wins"
+        if P1_side
+            str = "Player 1 loses"
             score[3] += 1 
         else
-            str = "$(turn_colour(side_colour)) Wins"
+            str = "Player 1 Wins"
             score[1] += 1
         end
     end
@@ -128,7 +128,7 @@ function play_game!(board,player,log_moves::Bool)
         ind = (ind + 1) % 2
         gameover!(board)
     end
-    return moves,PVs,Evals,trk_turns,trk_depth,trk_branch
+    return moves,PVs,Evals,trk_turns,trk_depth,trk_branch,player
 end
 
 "Play a match, both players play a position from both sides - modifies running score totals"
@@ -136,8 +136,9 @@ function match!(score,FEN,log_moves=false)
     track = Tracker()
 
     game1 = Boardstate(FEN)
-    moves,PVs,Evals,trk_turns,trk_depth,trk_branch = play_game!(game1,bot1,log_moves)
-    outcome = evaluate_game!(score,game1,white)
+    moves,PVs,Evals,trk_turns,trk_depth,trk_branch,final_player = play_game!(game1,bot1,log_moves)
+    P1_last = bot1 == final_player
+    outcome = evaluate_game!(score,game1,P1_last)
 
     track.depth_P1 += trk_depth[1]
     track.turns_P1 += trk_turns[1]
@@ -156,8 +157,9 @@ function match!(score,FEN,log_moves=false)
     track.outcome_G1 = outcome
 
     game2 = Boardstate(FEN)
-    moves,PVs,Evals,trk_turns,trk_depth,trk_branch = play_game!(game2,bot2,log_moves)
-    outcome = evaluate_game!(score,game2,black)
+    moves,PVs,Evals,trk_turns,trk_depth,trk_branch,final_player = play_game!(game2,bot2,log_moves)
+    P1_last = bot1 == final_player
+    outcome = evaluate_game!(score,game2,P1_last)
 
     track.depth_P1 += trk_depth[2]
     track.turns_P1 += trk_turns[2]

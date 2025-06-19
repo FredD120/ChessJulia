@@ -1,10 +1,10 @@
-using RevisionistV03_05
+using RevisionistV03_06
 using logic
 using Profile
 
 const profil = false
 const MAXTIME = 0.1
-const expensive = true
+const expensive = false
 
 function test_eval()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -41,7 +41,7 @@ function test_triangular()
 
     for ply in MAXDEPTH-1:-1:0
         tri_count += 1
-        copy_PV!(PVtable,ply,PV_len,new_move)
+        copy_PV!(PVtable,ply,PV_len,MAXDEPTH,new_move)
         @assert sum(PVtable) == triangle_number(tri_count)
     end
 end
@@ -52,7 +52,7 @@ function test_MVVLVA()
     board = Boardstate(FEN)
     moves = generate_moves(board)
 
-    score_moves!(moves,false)
+    score_moves!(moves,false,Killer())
     
     for move in moves
         if cap_type(move) == Queen
@@ -112,6 +112,18 @@ function test_ordering()
     end
 end
 test_ordering()
+
+function test_killer_score()
+    killer_vec = [Killer() for _ in 1:3]
+    
+end
+test_killer_score()
+
+function test_update_killer()
+    Killer = Killer()
+
+end
+test_update_killer()
 
 function test_best()
     FEN = "K6Q/8/8/8/8/8/8/b6k b - - 0 1"
@@ -193,7 +205,6 @@ end
 
 if expensive
     test_positions()
-    #Best score = 18/111
 end
 
 println("All tests passed")

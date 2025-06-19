@@ -7,10 +7,10 @@ INHERIT
 -> Iterative deepening
 -> Move ordering: 
     -PV
+    -MVV-LVA 
 
 NEW
 -> Move ordering: 
-    -MVV-LVA 
     -Killer moves
 -> Quiescence search
 -> Check extension

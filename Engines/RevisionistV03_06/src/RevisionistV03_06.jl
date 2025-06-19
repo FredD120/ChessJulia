@@ -1,18 +1,16 @@
-module RevisionistV03_05
+module RevisionistV03_06
 
 #=
-INHERIT
+CURRENT
 -> Evaluate positions based on piece value and piece square tables
 -> Minimax with alpha beta pruning tree search
 -> Iterative deepening
--> Move sorting: 
+-> Move ordering: 
     -PV
     -MVV-LVA 
-
-NEW
--> Move ordering: 
-
     -Killer moves
+
+TO-DO
 -> Quiescence search
 -> Check extension
 -> Transposition table
@@ -20,15 +18,14 @@ NEW
 -> Texel tuned PSTs
 
 TO THINK ABOUT
-#Sometimes we incorrectly think we are getting mated when we run out of time
-#What can we do if we have to cancel a search part way through?
+#When adding extensions, eg.for checks, we will exceed PV triangular ply and Killer ply
 =#
 
 using logic
 using StaticArrays
 export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
        triangle_number,copy_PV!,MAXDEPTH,MINCAPSCORE,MAXMOVESCORE,
-       Logger,swap!,next_best!,score_moves!
+       Logger,swap!,next_best!,score_moves!, Killer, new_killer!
 
 #define evaluation constants
 const INF::Int32 = typemax(Int32) - 1000
@@ -37,31 +34,54 @@ const INF::Int32 = typemax(Int32) - 1000
 const MAXDEPTH::UInt8 = UInt8(12)
 const MINDEPTH::UInt8 = UInt8(0)
 
+"Store two best quiet moves for a given ply"
+mutable struct Killer
+    First::UInt32
+    Second::UInt32
+end
+
+"Construct killers with null moves"
+Killer() = Killer(NULLMOVE,NULLMOVE)
+
+"Check that new move does not match second best killer, then push first to second and replace first"
+function new_killer!(KV::Vector{Killer},ply,move)
+    if move != KV[ply+1].Second
+        KV[ply+1].Second = KV[ply+1].First 
+        KV[ply+1].First = move 
+    end
+end
+
 mutable struct SearchInfo
     #Break out early with current best score if OOT
     starttime::Float64
     maxtime::Float64
+    maxdepth::UInt8
     #Record best moves from root to leaves for move ordering
     PV::Vector{UInt32}
     PV_len::UInt8
     nodes_since_time::UInt16
+    Killers::Vector{Killer}
 end
 
 "Triangle number for an index starting from zero"
 triangle_number(x) = Int(0.5*x*(x+1))
 
 "Constructor for search info struct"
-SearchInfo(t_start,t_max) = SearchInfo(t_start,t_max,NULLMOVE*ones(UInt32,triangle_number(MAXDEPTH)),0,0)
+function SearchInfo(t_start,t_max,maxdepth=MAXDEPTH)
+    triangular_PV = NULLMOVE*ones(UInt32,triangle_number(maxdepth))
+    killers = [Killer() for _ in 1:maxdepth]
+    SearchInfo(t_start,t_max,maxdepth,triangular_PV,0,0,killers)
+end
 
 "find index of PV move at current ply"
-PV_ind(ply) = Int(ply/2 * (2*MAXDEPTH + 1 - ply))
+PV_ind(ply,maxdepth) = Int(ply/2 * (2*maxdepth + 1 - ply))
 
 "Copies line below in triangular PV table"
-function copy_PV!(triangle_PV,ply,PV_len,move)
-    cur_ind = PV_ind(ply)
+function copy_PV!(triangle_PV,ply,PV_len,maxdepth,move)
+    cur_ind = PV_ind(ply,maxdepth)
     triangle_PV[cur_ind+1] = move
     for i in (cur_ind+1):(cur_ind+PV_len-ply-1)
-        triangle_PV[i+1] = triangle_PV[i+MAXDEPTH-ply]
+        triangle_PV[i+1] = triangle_PV[i+maxdepth-ply]
     end
 end
 
@@ -162,13 +182,22 @@ function next_best!(moves,cur_ind)
 end
 
 "Score moves based on PV, MVV-LVA and killers"
-function score_moves!(moves,isPV::Bool,PV_move::UInt32=NULLMOVE,killers=[NULLMOVE,NULLMOVE])
+function score_moves!(moves,isPV::Bool,killers::Killer,PV_move::UInt32=NULLMOVE)
     for (i,move) in enumerate(moves)
         if isPV && move == PV_move
             moves[i] = set_score(move,MAXMOVESCORE)
 
+        #sort captures
         elseif iscapture(move)
             moves[i] = set_score(move,MVV_LVA(cap_type(move),pc_type(move)))
+
+        #sort quiet moves
+        else
+            if move == killers.First
+                moves[i] = set_score(move,MINCAPSCORE-UInt8(1))
+            elseif move == killers.Second
+                moves[i] = set_score(move,MINCAPSCORE-UInt8(2))
+            end
         end
     end
 end
@@ -200,7 +229,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
         
     else
         moves = generate_moves(board,legal_info)
-        score_moves!(moves,onPV,info.PV[ply+1])
+        score_moves!(moves,onPV,info.Killers[ply+1],info.PV[ply+1])
 
         for i in eachindex(moves)
             next_best!(moves,i)
@@ -215,13 +244,17 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
 
             #update alpha when better score is found
             if score > α
+                #update killers if exceed α or β
+                if !iscapture(move)
+                    new_killer!(info.Killers,ply,move)
+                end
                 #cut when upper bound exceeded
                 if score >= β
                     return β
                 end
                 α = score
                 #exact score found, must copy up PV from further down the tree
-                copy_PV!(info.PV,ply,info.PV_len,move)
+                copy_PV!(info.PV,ply,info.PV_len,info.maxdepth,move)
             end
         end
         return α
@@ -240,7 +273,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     onPV = true 
 
     #root node is always on PV
-    score_moves!(moves,onPV,info.PV[ply+1])
+    score_moves!(moves,onPV,info.Killers[ply+1],info.PV[ply+1])
 
     for i in eachindex(moves)
         next_best!(moves,i)
@@ -255,7 +288,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
         end
 
         if score > α
-            copy_PV!(info.PV,ply,info.PV_len,move)
+            copy_PV!(info.PV,ply,info.PV_len,info.maxdepth,move)
             α = score
         end
         onPV = false
@@ -272,7 +305,7 @@ function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
     info = SearchInfo(t_start,T_MAX)
     bestscore = 0
 
-    while depth < MAXDEPTH
+    while depth < info.maxdepth
         #If we run out of time, cancel next iteration
         if (time() - t_start) > 0.2*T_MAX
             break
@@ -285,7 +318,7 @@ function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
 
         logger.PV = PV_string(info)
         if verbose
-            println("Searched to depth = $(logger.cur_depth). PV so far: "*logger.PV)
+            println("Searched to depth = $(logger.cur_depth) in $(round(time()-info.starttime,sigdigits=4)). PV so far: "*logger.PV)
         end
         
         if !logger.stopmidsearch

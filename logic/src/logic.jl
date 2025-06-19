@@ -17,13 +17,13 @@ To check generated code:
 @code_warntype
 =#
 
-export GUIposition, Boardstate, Move, make_move!, unmake_move!, UCImove, LONGmove,
-Neutral, Loss, Draw, generate_moves, Move, Whitesmove, perft,
+export GUIposition, Boardstate, Move, make_move!, unmake_move!, generate_moves,
+Neutral, Loss, Draw, Move, Whitesmove, perft, UCImove, LONGmove, SHORTmove,
 King, Queen, Rook, Bishop, Knight, Pawn, white, black, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
-ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score
+ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score, iscapture
 
 using InteractiveUtils
 using JLD2
@@ -535,6 +535,34 @@ function LONGmove(move::UInt32)
 
         promote = piece_letter(promote_type(flg))
         return P*F*mid*T*promote
+    end
+end
+
+"convert a move to short algebraic notation for comparison/communication"
+function SHORTmove(move::UInt32)
+    flg = flag(move)
+    if flg == KCASTLE
+        return "O-O"
+    elseif flg == QCASTLE
+        return "O-O-O"
+    else
+        T = UCIpos(to(move))
+        P = piece_letter(pc_type(move))
+        mid = "x"
+
+        if cap_type(move) == 0
+            mid = ""
+        end
+        if pc_type(move) == Pawn
+            if cap_type(move) == 0
+                P = ""
+            else
+                P = 'a' + (from(move) % 8)
+            end
+        end
+
+        promote = piece_letter(promote_type(flg))
+        return P*mid*T*promote
     end
 end
 
