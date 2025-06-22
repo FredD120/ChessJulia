@@ -1,6 +1,6 @@
 using chessGUI
 using logic
-import RevisionistV03_06 as bot
+import RevisionistV03_07 as bot
 
 const BOTTIME = 1.0
 
@@ -158,8 +158,7 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    FEN = "k7/r7/r7/8/8/8/8/7K b - - 0 1"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
     vsbot = true
     logicstate = Boardstate(FEN)
