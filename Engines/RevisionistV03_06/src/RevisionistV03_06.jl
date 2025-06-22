@@ -15,7 +15,11 @@ TO-DO
 -> Check extension
 -> Transposition table
 -> Null move pruning
+-> Delta/futility pruning
+-> PVS
 -> Texel tuned PSTs
+-> LMR + history
+-> NNUE
 
 TO THINK ABOUT
 #When adding extensions, eg.for checks, we will exceed PV triangular ply and Killer ply
@@ -28,7 +32,7 @@ export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
        Logger,swap!,next_best!,score_moves!, Killer, new_killer!
 
 #define evaluation constants
-const INF::Int32 = typemax(Int32) - 1000
+const INF::Int32 = typemax(Int32)
 
 #maximum search depth
 const MAXDEPTH::UInt8 = UInt8(12)
@@ -45,7 +49,7 @@ Killer() = Killer(NULLMOVE,NULLMOVE)
 
 "Check that new move does not match second best killer, then push first to second and replace first"
 function new_killer!(KV::Vector{Killer},ply,move)
-    if move != KV[ply+1].Second
+    if move != KV[ply+1].First
         KV[ply+1].Second = KV[ply+1].First 
         KV[ply+1].First = move 
     end
@@ -100,9 +104,9 @@ end
 Logger() = Logger(0,0,0,0,false,"")
 
 "Constant evaluation of stalemate"
-eval(::Draw,depth) = Int32(0)
+eval(::Draw,ply) = Int32(0)
 "Constant evaluation of being checkmated (favour quicker mates)"
-eval(::Loss,depth) = -INF - depth
+eval(::Loss,ply) = -INF + ply
 
 #number of pieces left when endgame begins
 const EGBEGIN = 12
@@ -219,7 +223,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     legal_info = gameover!(board)
     if board.State != Neutral()
         logger.pos_eval += 1
-        value = eval(board.State,depth)
+        value = eval(board.State,ply)
         return value
 
     elseif depth <= MINDEPTH
@@ -244,12 +248,12 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
 
             #update alpha when better score is found
             if score > α
-                #update killers if exceed α or β
-                if !iscapture(move)
-                    new_killer!(info.Killers,ply,move)
-                end
                 #cut when upper bound exceeded
                 if score >= β
+                    #update killers if exceed β
+                    if !iscapture(move)
+                        new_killer!(info.Killers,ply,move)
+                    end
                     return β
                 end
                 α = score
@@ -283,7 +287,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
         score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
         unmake_move!(board)
 
-        if logger.stopmidsearch
+        if logger.stopmidsearch || (abs(logger.best_score) == INF+1)
             break
         end
 
@@ -340,7 +344,19 @@ function best_move(board::Boardstate,T_MAX,logging=false)
     best_move != NULLMOVE || error("Failed to find move better than null move")
 
     if logging
-        println("Best move = $(LONGmove(best_move)). Move score = $(logger.best_score). Evaluated $(logger.cum_nodes) positions. Reached depth $((logger.cur_depth)). Time taken: $(round(δt,sigdigits=6))s.)")
+        best ="$(logger.best_score)"
+        if abs(logger.best_score) >= INF - 100
+            dist = Int((INF - abs(logger.best_score))÷2)
+            best = logger.best_score > 0 ? "Engine Mate in $dist" : "Opponent Mate in $dist"
+        end
+
+        #If we stopped midsearch, we still want to add to total nodes and nps (but not when calculating branching factor)
+        nodes = logger.cum_nodes
+        if logger.stopmidsearch
+            nodes += logger.pos_eval
+        end
+
+        println("Best move = $(LONGmove(best_move)). Move score = "*best*". Nodes = $(nodes) ($(round(nodes/δt,sigdigits=4)))nps. Reached depth $((logger.cur_depth)). Time taken: $(round(δt,sigdigits=6))s.)")
         if logger.stopmidsearch
             println("Ran out of time mid search.")
         end

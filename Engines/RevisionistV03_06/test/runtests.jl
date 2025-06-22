@@ -115,13 +115,29 @@ test_ordering()
 
 function test_killer_score()
     killer_vec = [Killer() for _ in 1:3]
-    
+    ply = 2
+
+    killer_vec[ply+1] = Killer(UInt32(1),UInt32(2))
+    moves = [UInt32(3),UInt32(5),UInt32(2)]
+
+    score_moves!(moves,false,killer_vec[ply+1])
+    @assert score(moves[3]) > score(moves[2]) "Move in killer table should be ranked highest"
+    @assert score(moves[3]) > score(moves[1]) "Move in killer table should be ranked highest"
 end
 test_killer_score()
 
 function test_update_killer()
-    Killer = Killer()
+    killer_vec = [Killer() for _ in 1:3]
+    ply = 1
 
+    for move in UInt32(1):UInt32(10)
+        new_killer!(killer_vec,ply,move)
+    end
+    @assert killer_vec[ply+1].First == UInt32(10) 
+    @assert killer_vec[ply+1].Second == UInt32(9) 
+
+    new_killer!(killer_vec,ply,UInt32(10))
+    @assert killer_vec[ply+1].First != killer_vec[ply+1].Second "Can't have same move twice in killer table at same ply"
 end
 test_update_killer()
 
