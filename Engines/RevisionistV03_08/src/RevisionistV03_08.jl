@@ -1,4 +1,4 @@
-module RevisionistV03_07
+module RevisionistV03_08
 
 #=
 CURRENT
@@ -10,9 +10,9 @@ CURRENT
     -MVV-LVA 
     -Killer moves
 -> Quiescence search
+-> Check extension
 
 TO-DO
--> Check extension
 -> Transposition table
 -> Null move pruning
 -> Delta/futility pruning
@@ -229,20 +229,86 @@ function quiescence(board::Boardstate,player::Int8,α,β,ply,info::SearchInfo,lo
     #still need to check for terminal nodes in qsearch
     legal_info = gameover!(board)
     if board.State != Neutral()
-        value = eval(board.State,ply)
-        return value
+        return eval(board.State,ply)
     end
+
+    ###
+    if legal_info.attack_num == 0
+        best_score = player*evaluate(board)
+        if best_score > α
+            if best_score >= β
+                return β
+            end
+            α = best_score
+        end
+        moves = generate_attacks(board,legal_info)
+        score_moves!(moves,false)
+
+        for i in eachindex(moves)
+            next_best!(moves,i)
+            move = moves[i]
+
+            make_move!(move,board)
+            score = -quiescence(board,-player,-β,-α,ply+1,info,logger)
+            unmake_move!(board)
+
+            if score > α
+                if score >= β
+                    return β
+                end
+                α = score
+            end
+            if score > best_score
+                best_score = score
+            end
+        end
+        return best_score
+
+    else
+        moves = generate_moves(board,legal_info)
+        score_moves!(moves,false)
+
+        for i in eachindex(moves)
+            next_best!(moves,i)
+            move = moves[i]
+
+            make_move!(move,board)
+            score = -quiescence(board,-player,-β,-α,ply+1,info,logger)
+            unmake_move!(board)
+
+            if score > α
+                if score >= β
+                    return β
+                end
+                α = score
+            end
+        end
+        return α
+    end
+    ###
+
+    #=
+    best_score = 0
+    moves = UInt32[]
 
     #stand-pat eval
-    best_score = player*evaluate(board)
-    if best_score > α
-        if best_score >= β
-            return β
+    if legal_info.attack_num == 0
+        best_score = player*evaluate(board)
+        if best_score > α
+            if best_score >= β
+                return β
+            end
+            α = best_score
         end
-        α = best_score
+        moves = generate_attacks(board,legal_info)
+
+    #if side to move is in check, position is not quiet so must search all evasions
+    #cannot stand-pat if check is not resolved
+    else
+        best_score = -INF
+        moves = generate_moves(board,legal_info)
     end
 
-    moves = generate_attacks(board,legal_info)
     score_moves!(moves,false)
 
     for i in eachindex(moves)
@@ -263,8 +329,9 @@ function quiescence(board::Boardstate,player::Int8,α,β,ply,info::SearchInfo,lo
             best_score = score
         end
     end
-
     return best_score
+
+    =#
 end
 
 "minimax algorithm, tries to maximise own eval and minimise opponent eval"

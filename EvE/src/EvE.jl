@@ -1,5 +1,5 @@
 import RevisionistV03_07 as bot1
-import RevisionistV03_06 as bot2
+import RevisionistV03_08 as bot2
 using logic
 using HDF5
 
@@ -8,7 +8,7 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 0.5
+const MAXTIME = 1.0
 
 "Cumulative data from loggers for whole match"
 mutable struct Tracker
@@ -192,9 +192,13 @@ function main()
 
     trackers = Vector{Tracker}(undef,length(FENstrings))
     t = time()
+    game_num = 0
+    total = length(FENstrings)
     Threads.@threads for (game_num,FEN) in collect(enumerate(FENstrings))
         println("Playing FEN: $FEN")
         trackers[game_num] = match!(score,FEN)
+        game_num += 1
+        println("$game_num/$total")
     end
     total_time = time() - t
 
