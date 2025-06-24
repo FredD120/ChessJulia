@@ -715,6 +715,31 @@ function test_perft()
 end
 test_perft()
 
+function test_TT()
+    TT = TranspositionTable(4,PerftData)
+    @assert TT.Shift == 60
+    for T in TT.HashTable
+        @assert T.Zkey == 0
+        @assert T.Data.depth == 0
+        @assert T.Data.leaves == 0
+    end    
+
+    Z1 = UInt64(2^61+2^62+2^10) 
+    Z2 = UInt64(2^61+2^62+2^11) 
+
+    new_data = PerftData(UInt8(5),UInt128(1))
+
+    set_entry!(TT,Z1,new_data)
+    TT_entry1 = get_entry(TT,Z1)
+    TT_entry2 = get_entry(TT,Z2)
+
+    @assert TT_entry1.Data == new_data "retrieve data"
+    @assert TT_entry1 == TT_entry2 "access same TT entry"
+    @assert TT_entry2.Zkey == Z1 "Zkey matches"
+    @assert TT_entry2.Zkey != Z2 "key collision"
+end
+test_TT()
+
 function test_speed()
     FENs = ["nnnnknnn/8/8/8/8/8/8/NNNNKNNN w - 0 1",
     "bbbqknbq/8/8/8/8/8/8/QNNNKBBQ w - 0 1",
@@ -724,6 +749,7 @@ function test_speed()
     Targets = [11813050,7466475,7960855,4085603]
     Δt = 0
     leaves = 0
+    TT_size = 0
 
     for (FEN,depth,target) in zip(FENs,Depths,Targets)
         board = Boardstate(FEN)
@@ -731,7 +757,9 @@ function test_speed()
             println("Testing position: $FEN")
         end
         t = time()
-        cur_leaves = perft(board,depth,verbose)
+        TT = TranspositionTable(TT_size,PerftData)
+        cur_leaves = perft(board,depth,TT,verbose)
+        println()
         Δt += time() - t
         leaves += cur_leaves
 

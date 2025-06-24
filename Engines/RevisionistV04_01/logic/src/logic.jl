@@ -24,7 +24,7 @@ NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
 ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score, iscapture,
-TranspositionTable, get_entry, set_entry!, PerftData
+TranspositionTable, get_entry, set_entry!, PerftData, generate_hash
 
 using InteractiveUtils
 using JLD2
@@ -386,18 +386,20 @@ function place_piece!(pieces::AbstractArray{UInt64},pieceID,pos)
 end
 
 "Helper function to modify Zhash based on castle rights"
-function Zhashcastle!(ZHash,castling)
+function Zhashcastle(ZHash,castling)
     #use last rank of black pawns and 8 extra indices (0⋜castling⋜15)
     ZHash ⊻= ZobristKeys[end - 16 + castling]
+    return ZHash
 end
 
 "Helper function to modify Zhash based on en-passant"
-function ZhashEP!(ZHash,enpassant)
+function ZhashEP(ZHash,enpassant)
     for EP in enpassant
         file = EP % 8
         #use first rank of black pawns
         ZHash ⊻= ZobristKeys[64*(11)+file+1]
     end
+    return ZHash
 end
 
 "Returns zobrist key associated with a coloured piece at a location"
@@ -417,8 +419,8 @@ function generate_hash(pieces,colour::UInt8,castling,enpassant)
 
     #the rest of this data is packed in using the fact that neither
     #black nor white pawns will exist on first or last rank
-    ZhashEP!(ZHash,enpassant)
-    Zhashcastle!(ZHash,castling)
+    ZHash = ZhashEP(ZHash,enpassant)
+    ZHash = Zhashcastle(ZHash,castling)
 
     if !Whitesmove(colour)
         ZHash ⊻= ZKeyColour()
@@ -1347,9 +1349,16 @@ end
 function updateCrights!(board::Boardstate,ColId,side)
     #remove ally castling rights by &-ing with opponent mask
     #side is king=1, queen=2, both=0
-    Zhashcastle!(board.ZHash,board.Castle)
+    board.ZHash = Zhashcastle(board.ZHash,board.Castle)
     board.Castle = get_Crights(board.Castle,ColId,side)
-    Zhashcastle!(board.ZHash,board.Castle)
+    board.ZHash = Zhashcastle(board.ZHash,board.Castle)
+end
+
+"set new EP val and incrementally update zobrist hash"
+function updateEP!(board::Boardstate,newval::UInt64)
+    board.ZHash = ZhashEP(board.ZHash,board.EnPass)
+    board.EnPass = newval
+    board.ZHash = ZhashEP(board.ZHash,board.EnPass)
 end
 
 "Decide which piecetype to promote to"
@@ -1439,11 +1448,13 @@ function make_move!(move::UInt32,board::Boardstate)
     #update EnPassant
     if mv_flag == DPUSH
         location = EPlocation(board.Colour,mv_to)
-        board.EnPass = UInt64(1) << location
+        updateEP!(board,UInt64(1) << location)
+
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
     elseif board.EnPass > 0
-        board.EnPass = UInt64(0)
+        updateEP!(board,UInt64(0))
+
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
     else

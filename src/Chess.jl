@@ -116,6 +116,10 @@ end
 
 "tell GUI what to do when mouse pressed"
 function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
+    println(logicstate.ZHash)
+    println(generate_hash(logicstate))
+    println("###################")
+    
     mouse_evt = getproperty(evt,:button)
     xpos = getproperty(mouse_evt,:x)
     ypos = getproperty(mouse_evt,:y)
@@ -160,7 +164,7 @@ function main()
     #SDL_Quit()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
-    vsbot = true
+    vsbot = false
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
     legal_moves = generate_moves(logicstate)

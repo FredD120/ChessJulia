@@ -792,8 +792,4 @@ if expensive
     #best = 6.9e7 nps
 end
 
-board = Boardstate(FEN)
-TT = TranspositionTable(20,PerftData)
-@time println(perft(board,7,TT,true))
-
 println("All tests passed")

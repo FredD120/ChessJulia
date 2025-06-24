@@ -23,7 +23,8 @@ King, Queen, Rook, Bishop, Knight, Pawn, white, black, piecetypes,
 NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
-ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score, iscapture
+ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score, iscapture,
+TranspositionTable, get_entry, set_entry!, PerftData, generate_hash
 
 using InteractiveUtils
 using JLD2
@@ -385,18 +386,20 @@ function place_piece!(pieces::AbstractArray{UInt64},pieceID,pos)
 end
 
 "Helper function to modify Zhash based on castle rights"
-function Zhashcastle!(ZHash,castling)
+function Zhashcastle(ZHash,castling)
     #use last rank of black pawns and 8 extra indices (0⋜castling⋜15)
     ZHash ⊻= ZobristKeys[end - 16 + castling]
+    return ZHash
 end
 
 "Helper function to modify Zhash based on en-passant"
-function ZhashEP!(ZHash,enpassant)
+function ZhashEP(ZHash,enpassant)
     for EP in enpassant
         file = EP % 8
         #use first rank of black pawns
         ZHash ⊻= ZobristKeys[64*(11)+file+1]
     end
+    return ZHash
 end
 
 "Returns zobrist key associated with a coloured piece at a location"
@@ -416,14 +419,17 @@ function generate_hash(pieces,colour::UInt8,castling,enpassant)
 
     #the rest of this data is packed in using the fact that neither
     #black nor white pawns will exist on first or last rank
-    ZhashEP!(ZHash,enpassant)
-    Zhashcastle!(ZHash,castling)
+    ZHash = ZhashEP(ZHash,enpassant)
+    ZHash = Zhashcastle(ZHash,castling)
 
     if !Whitesmove(colour)
         ZHash ⊻= ZKeyColour()
     end
     return ZHash
 end
+
+"generate zobrist hash statically from existing boardstate"
+generate_hash(b::Boardstate) = generate_hash(b.pieces,b.Colour,b.Castle,b.EnPass)
 
 "Initialise a boardstate from a FEN string"
 function Boardstate(FEN)
@@ -1343,9 +1349,16 @@ end
 function updateCrights!(board::Boardstate,ColId,side)
     #remove ally castling rights by &-ing with opponent mask
     #side is king=1, queen=2, both=0
-    Zhashcastle!(board.ZHash,board.Castle)
+    board.ZHash = Zhashcastle(board.ZHash,board.Castle)
     board.Castle = get_Crights(board.Castle,ColId,side)
-    Zhashcastle!(board.ZHash,board.Castle)
+    board.ZHash = Zhashcastle(board.ZHash,board.Castle)
+end
+
+"set new EP val and incrementally update zobrist hash"
+function updateEP!(board::Boardstate,newval::UInt64)
+    board.ZHash = ZhashEP(board.ZHash,board.EnPass)
+    board.EnPass = newval
+    board.ZHash = ZhashEP(board.ZHash,board.EnPass)
 end
 
 "Decide which piecetype to promote to"
@@ -1435,11 +1448,13 @@ function make_move!(move::UInt32,board::Boardstate)
     #update EnPassant
     if mv_flag == DPUSH
         location = EPlocation(board.Colour,mv_to)
-        board.EnPass = UInt64(1) << location
+        updateEP!(board,UInt64(1) << location)
+
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
     elseif board.EnPass > 0
-        board.EnPass = UInt64(0)
+        updateEP!(board,UInt64(0))
+
         push!(board.Data.EnPassant,board.EnPass)
         push!(board.Data.EPCount,0)
     else
@@ -1535,22 +1550,78 @@ function unmake_move!(board::Boardstate)
     end
 end
 
-function perft(board::Boardstate,depth,verbose=false)
+"Entry in TT with z hash check and data contained"
+mutable struct Transposition{T}
+    Zkey::UInt64
+    Data::T
+end
+
+"Construct entry in TT using default constructor of generic TT data"
+Transposition(type) = Transposition(UInt64(0),type())
+
+"hold hash table and bitshift to get index from zobrist hash"
+struct TranspositionTable{T}
+    Shift::UInt8
+    HashTable::Vector{Transposition{T}}
+end
+
+"construct TT using its size in bits and type of data stored. return nothing if length = 0"
+function TranspositionTable(size::Int,type)::Union{TranspositionTable,Nothing}
+    if size > 0
+        hash_table = [Transposition(type) for _ in 1:2^size]
+        return TranspositionTable(UInt8(64-size),hash_table)
+    end
+    return nothing
+end
+
+"retrieve transposition from TT using index derived from bitshift"
+get_entry(TT::TranspositionTable,Zhash::UInt64) = TT.HashTable[(Zhash>>TT.Shift)+1]
+
+"set value of entry in TT"
+function set_entry!(TT::TranspositionTable,Zhash::UInt64,data) 
+    TT.HashTable[(Zhash>>TT.Shift)+1] = Transposition(Zhash,data)
+end
+
+"hold data required for perft"
+struct PerftData
+    depth::UInt8
+    leaves::UInt128
+end
+
+"generic constructor for perft data"
+PerftData() = PerftData(UInt8(0),UInt128(0))
+
+"count leaf nodes from a position at a given depth"
+function perft(board::Boardstate,depth,TT::Union{TranspositionTable,Nothing}=nothing,verbose=false)
+    if depth == 1
+        return length(generate_moves(board))
+    end
+    
+    TT_enabled = !isnothing(TT)
+    if TT_enabled
+        TT_entry = get_entry(TT,board.ZHash)
+        if TT_entry.Zkey == board.ZHash
+            data = TT_entry.Data
+            if depth == data.depth
+                return data.leaves
+            end
+        end
+    end
+
     leaf_nodes = 0
     moves = generate_moves(board)
-
-    if depth == 1
-        return length(moves)
-    else
-        for move in moves
-            make_move!(move,board)
-            nodecount = perft(board,depth-1)
-            if verbose == true
-             println(LONGmove(move) * ": " * string(nodecount))
-            end
-            leaf_nodes += nodecount
-            unmake_move!(board)
+    for move in moves
+        make_move!(move,board)
+        nodecount = perft(board,depth-1,TT)
+        if verbose == true
+        println(UCImove(move) * ": " * string(nodecount))
         end
+        leaf_nodes += nodecount
+        unmake_move!(board)
+    end
+
+    if TT_enabled
+        set_entry!(TT,board.ZHash,PerftData(depth,leaf_nodes))
     end
     return leaf_nodes
 end
