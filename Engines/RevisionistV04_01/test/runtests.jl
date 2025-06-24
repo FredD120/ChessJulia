@@ -1,10 +1,10 @@
-using RevisionistV03_08
+using RevisionistV04_01
 using logic
 using Profile
 
 const profil = false
-const MAXTIME = 0.5
-const expensive = true
+const MAXTIME = 0.1
+const expensive = false
 
 function test_eval()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"

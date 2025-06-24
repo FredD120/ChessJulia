@@ -75,8 +75,8 @@ function single_perft(FEN,depth)
 end
 
 function main()
-    #comparePerft()
-    perft_suite(6)
+    comparePerft()
+    #perft_suite(6)
     #single_perft("nnnnknnn/8/8/8/8/8/8/NNNNKNNN w KQkq - 0 1",5)
 end
 main()
