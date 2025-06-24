@@ -52,7 +52,7 @@ function test_MVVLVA()
     board = Boardstate(FEN)
     moves = generate_moves(board)
 
-    score_moves!(moves,false,Killer())
+    score_moves!(moves,Killer())
     
     for move in moves
         if cap_type(move) == Queen
@@ -120,7 +120,7 @@ function test_killer_score()
     killer_vec[ply+1] = Killer(UInt32(1),UInt32(2))
     moves = [UInt32(3),UInt32(5),UInt32(2)]
 
-    score_moves!(moves,false,killer_vec[ply+1])
+    score_moves!(moves,killer_vec[ply+1])
     @assert score(moves[3]) > score(moves[2]) "Move in killer table should be ranked highest"
     @assert score(moves[3]) > score(moves[1]) "Move in killer table should be ranked highest"
 end

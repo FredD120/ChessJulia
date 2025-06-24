@@ -24,6 +24,7 @@ TO-DO
 TO THINK ABOUT
 #When adding extensions, eg.for checks, we will exceed PV triangular ply and Killer ply
 #Need to check for FIDE draws like KNk,KBk as well as unforcable draws like KNkb
+#making score an Int16 would fit better in TT
 =#
 
 using logic
@@ -38,6 +39,7 @@ const INF::Int32 = typemax(Int32)
 #maximum search depth
 const MAXDEPTH::UInt8 = UInt8(12)
 const MINDEPTH::UInt8 = UInt8(0)
+const TTSIZE::UInt8 = UInt8(21)
 
 "Store two best quiet moves for a given ply"
 mutable struct Killer
@@ -68,14 +70,17 @@ mutable struct SearchInfo
     Killers::Vector{Killer}
 end
 
+global TT = TranspositionTable(TTsize,SearchData)
+
 "Triangle number for an index starting from zero"
 triangle_number(x) = Int(0.5*x*(x+1))
 
 "Constructor for search info struct"
-function SearchInfo(t_start,t_max,maxdepth=MAXDEPTH)
+function SearchInfo(t_max,maxdepth=MAXDEPTH)
     triangular_PV = NULLMOVE*ones(UInt32,triangle_number(maxdepth))
     killers = [Killer() for _ in 1:maxdepth]
-    SearchInfo(t_start,t_max,maxdepth,triangular_PV,0,0,killers)
+    #println("TT size = $(round(sizeof(TT.HashTable)/1e6,sigdigits=4)) Mb")
+    SearchInfo(time(),t_max,maxdepth,triangular_PV,0,0,killers)
 end
 
 "find index of PV move at current ply"
@@ -93,6 +98,30 @@ end
 "return PV as string"
 PV_string(info::SearchInfo) = "$([LONGmove(m) for m in info.PV[1:info.PV_len]])"
 
+"types of nodes based on position in search tree"
+const NONE = UInt8(0)
+const ALPHA = UInt8(1)
+const BETA = UInt8(2)
+const EXACT = UInt8(3)
+
+"data describing a node, to be stored in TT"
+struct SearchData
+    ZHash::UInt64
+    depth::UInt8
+    score::Int32
+    type::UInt8
+    move::UInt32
+end
+
+"generic constructor for search data"
+SearchData() = SearchData(UInt64(0),UInt8(0),Int32(0),NONE,NULLMOVE)
+
+"update entry in TT. currently always replace"
+function TT_store!(ZHash,depth,score,node_type,best_move)
+    new_data = SearchData(ZHash,depth,score,node_type,best_move)
+    set_entry!(TT,new_data)
+end
+
 mutable struct Logger
     best_score::Int32
     pos_eval::Int32
@@ -103,9 +132,10 @@ mutable struct Logger
     stopmidsearch::Bool
     PV::String
     seldepth::UInt8
+    TT_cut::Int32
 end
 
-Logger() = Logger(0,0,0,0,0,0,false,"",0)
+Logger() = Logger(0,0,0,0,0,0,false,"",0,0)
 
 "Constant evaluation of stalemate"
 eval(::Draw,ply) = Int32(0)
@@ -190,9 +220,9 @@ function next_best!(moves,cur_ind)
 end
 
 "Score moves based on PV, MVV-LVA and killers"
-function score_moves!(moves,isPV::Bool,killers::Killer=Killer(),PV_move::UInt32=NULLMOVE)
+function score_moves!(moves,killers::Killer=Killer(),best_move::UInt32=NULLMOVE)
     for (i,move) in enumerate(moves)
-        if isPV && move == PV_move
+        if move == best_move
             moves[i] = set_score(move,MAXMOVESCORE)
 
         #sort captures
@@ -241,7 +271,7 @@ function quiescence(board::Boardstate,player::Int8,α,β,ply,info::SearchInfo,lo
             α = best_score
         end
         moves = generate_attacks(board,legal_info)
-        score_moves!(moves,false)
+        score_moves!(moves)
 
         for i in eachindex(moves)
             next_best!(moves,i)
@@ -265,7 +295,7 @@ function quiescence(board::Boardstate,player::Int8,α,β,ply,info::SearchInfo,lo
 
     else
         moves = generate_moves(board,legal_info)
-        score_moves!(moves,false)
+        score_moves!(moves)
 
         for i in eachindex(moves)
             next_best!(moves,i)
@@ -306,14 +336,47 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
         logger.pos_eval += 1
         value = eval(board.State,ply)
         return value
-    #enter quiescence search
-    elseif depth <= MINDEPTH
+    end
+
+    #enter quiescence search if at leaf node
+    if depth <= MINDEPTH
         logger.pos_eval += 1
         return quiescence(board,player,α,β,ply,info,logger)
     end
 
+    best_move = NULLMOVE
+    #dont use TT if on PV (still save result of PV search in TT)
+    if onPV
+        best_move = info.PV[ply+1]
+    else
+        TT_data = get_entry(TT,board.ZHash)
+        #no point using TT if hash collision
+        if TT_data.ZHash == board.ZHash
+            #don't try to cutoff if depth of TT entry is too low
+            if TT_data.depth >= depth 
+                if TT_data.type == EXACT
+                    logger.TT_cut += 1
+                    return TT_data.score
+                elseif TT_data.type == BETA && TT_data.score >= β
+                    logger.TT_cut += 1
+                    return β
+                elseif TT_data.type == ALPHA && TT_data.score <= α 
+                    logger.TT_cut += 1
+                    return α
+                end
+            end
+            #we can only use the move stored if we found BETA or EXACT node
+            #otherwise it will be a NULLMOVE so won't match in move scoring
+            best_move = TT_data.move
+        end
+    end
+
+    #figure out type of current node for use in TT and best move
+    node_type = ALPHA
+    cur_best_move = NULLMOVE   
+
     moves = generate_moves(board,legal_info)
-    score_moves!(moves,onPV,info.Killers[ply+1],info.PV[ply+1])
+    score_moves!(moves,info.Killers[ply+1],best_move)
 
     for i in eachindex(moves)
         next_best!(moves,i)
@@ -334,13 +397,19 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
                 if !iscapture(move)
                     new_killer!(info.Killers,ply,move)
                 end
+
+                TT_store!(board.ZHash,depth,score,BETA,move)
                 return β
             end
+            node_type = EXACT
+            cur_best_move = move
             α = score
             #exact score found, must copy up PV from further down the tree
             copy_PV!(info.PV,ply,info.PV_len,info.maxdepth,move)
         end
     end
+
+    TT_store!(board.ZHash,depth,α,node_type,cur_best_move)
     return α
 end
 
@@ -356,7 +425,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     onPV = true 
 
     #root node is always on PV
-    score_moves!(moves,onPV,info.Killers[ply+1],info.PV[ply+1])
+    score_moves!(moves,info.Killers[ply+1],info.PV[ply+1])
 
     for i in eachindex(moves)
         next_best!(moves,i)
@@ -384,15 +453,14 @@ function iterative_deepening(board::Boardstate,T_MAX,verbose::Bool)
     moves = generate_moves(board)
     depth = 0
     logger = Logger()
-    t_start = time()
-    info = SearchInfo(t_start,T_MAX)
+    info = SearchInfo(T_MAX)
     bestscore = 0
 
     #Quit early if we or opponent have M1
     while (depth < info.maxdepth) &&  
         !(abs(logger.best_score)==INF-1 || abs(logger.best_score)==INF-2)
         #If we run out of time, cancel next iteration
-        if (time() - t_start) > 0.2*T_MAX
+        if (time() - info.starttime) > 0.2*T_MAX
             break
         end
 
@@ -439,6 +507,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
         Quiescent nodes = $(logger.Qnodes) ($(round(100*logger.Qnodes/logger.nodes,sigdigits=3))%). \
         Depth = $((logger.cur_depth)). \
         Max ply = $(logger.seldepth). \
+        TT cuts = $(logger.TT_cut). \
         Time = $(round(δt,sigdigits=6))s.)")
 
         if logger.stopmidsearch

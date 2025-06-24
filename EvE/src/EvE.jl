@@ -1,5 +1,5 @@
-import RevisionistV03_07 as bot1
-import RevisionistV03_08 as bot2
+import RevisionistV03_08 as bot1
+import RevisionistV04_01 as bot2
 using logic
 using HDF5
 
@@ -192,13 +192,13 @@ function main()
 
     trackers = Vector{Tracker}(undef,length(FENstrings))
     t = time()
-    game_num = 0
+    num = 0
     total = length(FENstrings)
     Threads.@threads for (game_num,FEN) in collect(enumerate(FENstrings))
         println("Playing FEN: $FEN")
         trackers[game_num] = match!(score,FEN)
-        game_num += 1
-        println("$game_num/$total")
+        num += 1
+        println("$num/$total")
     end
     total_time = time() - t
 

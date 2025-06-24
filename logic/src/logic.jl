@@ -1550,25 +1550,16 @@ function unmake_move!(board::Boardstate)
     end
 end
 
-"Entry in TT with z hash check and data contained"
-mutable struct Transposition{T}
-    Zkey::UInt64
-    Data::T
-end
-
-"Construct entry in TT using default constructor of generic TT data"
-Transposition(type) = Transposition(UInt64(0),type())
-
 "hold hash table and bitshift to get index from zobrist hash"
 struct TranspositionTable{T}
     Shift::UInt8
-    HashTable::Vector{Transposition{T}}
+    HashTable::Vector{T}
 end
 
 "construct TT using its size in bits and type of data stored. return nothing if length = 0"
-function TranspositionTable(size::Int,type)::Union{TranspositionTable,Nothing}
+function TranspositionTable(size::Integer,type)::Union{TranspositionTable,Nothing}
     if size > 0
-        hash_table = [Transposition(type) for _ in 1:2^size]
+        hash_table = [type() for _ in 1:2^size]
         return TranspositionTable(UInt8(64-size),hash_table)
     end
     return nothing
@@ -1578,18 +1569,19 @@ end
 get_entry(TT::TranspositionTable,Zhash::UInt64) = TT.HashTable[(Zhash>>TT.Shift)+1]
 
 "set value of entry in TT"
-function set_entry!(TT::TranspositionTable,Zhash::UInt64,data) 
-    TT.HashTable[(Zhash>>TT.Shift)+1] = Transposition(Zhash,data)
+function set_entry!(TT::TranspositionTable,data) 
+    TT.HashTable[(data.ZHash>>TT.Shift)+1] = data
 end
 
 "hold data required for perft"
 struct PerftData
+    ZHash::UInt64
     depth::UInt8
     leaves::UInt128
 end
 
 "generic constructor for perft data"
-PerftData() = PerftData(UInt8(0),UInt128(0))
+PerftData() = PerftData(UInt64(0),UInt8(0),UInt128(0))
 
 "count leaf nodes from a position at a given depth"
 function perft(board::Boardstate,depth,TT::Union{TranspositionTable,Nothing}=nothing,verbose=false)
@@ -1600,10 +1592,9 @@ function perft(board::Boardstate,depth,TT::Union{TranspositionTable,Nothing}=not
     TT_enabled = !isnothing(TT)
     if TT_enabled
         TT_entry = get_entry(TT,board.ZHash)
-        if TT_entry.Zkey == board.ZHash
-            data = TT_entry.Data
-            if depth == data.depth
-                return data.leaves
+        if TT_entry.ZHash == board.ZHash
+            if depth == TT_entry.depth
+                return TT_entry.leaves
             end
         end
     end
@@ -1621,7 +1612,7 @@ function perft(board::Boardstate,depth,TT::Union{TranspositionTable,Nothing}=not
     end
 
     if TT_enabled
-        set_entry!(TT,board.ZHash,PerftData(depth,leaf_nodes))
+        set_entry!(TT,PerftData(board.ZHash,depth,leaf_nodes))
     end
     return leaf_nodes
 end

@@ -718,25 +718,25 @@ test_perft()
 function test_TT()
     TT = TranspositionTable(4,PerftData)
     @assert TT.Shift == 60
-    for T in TT.HashTable
-        @assert T.Zkey == 0
-        @assert T.Data.depth == 0
-        @assert T.Data.leaves == 0
+    for Data in TT.HashTable
+        @assert Data.ZHash == 0
+        @assert Data.depth == 0
+        @assert Data.leaves == 0
     end    
 
     Z1 = UInt64(2^61+2^62+2^10) 
     Z2 = UInt64(2^61+2^62+2^11) 
 
-    new_data = PerftData(UInt8(5),UInt128(1))
+    new_data = PerftData(Z1,UInt8(5),UInt128(1))
 
-    set_entry!(TT,Z1,new_data)
+    set_entry!(TT,new_data)
     TT_entry1 = get_entry(TT,Z1)
     TT_entry2 = get_entry(TT,Z2)
 
-    @assert TT_entry1.Data == new_data "retrieve data"
+    @assert TT_entry1 == new_data "retrieve data"
     @assert TT_entry1 == TT_entry2 "access same TT entry"
-    @assert TT_entry2.Zkey == Z1 "Zkey matches"
-    @assert TT_entry2.Zkey != Z2 "key collision"
+    @assert TT_entry2.ZHash == Z1 "Zkey matches"
+    @assert TT_entry2.ZHash != Z2 "key collision"
 end
 test_TT()
 
@@ -791,5 +791,17 @@ if expensive
     #benchmarkspeed(leaves)
     #best = 6.9e7 nps
 end
+
+function test_TT_perft()
+    #best speed = 180 Mnps
+    board = Boardstate(FEN)
+    TT = TranspositionTable(24,PerftData)
+    println("TT size = $(round(sizeof(TT.HashTable)/1e6,sigdigits=4)) Mb")
+    t = time()
+    @assert perft(board,7,TT,true) == 3195901860
+    δt = time()-t
+    println("Successfully determined perft 7 in $(round(δt,sigdigits=4))s. $(round(3195901860/(δt*1e6),sigdigits=6)) Mnps")
+end
+test_TT_perft()
 
 println("All tests passed")
