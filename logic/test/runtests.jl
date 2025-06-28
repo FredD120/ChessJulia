@@ -795,8 +795,7 @@ end
 function test_TT_perft()
     #best speed = 180 Mnps
     board = Boardstate(FEN)
-    TT = TranspositionTable(24,PerftData)
-    println("TT size = $(round(sizeof(TT.HashTable)/1e6,sigdigits=4)) Mb")
+    TT = TranspositionTable(24,PerftData,true)
     t = time()
     @assert perft(board,7,TT,true) == 3195901860
     δt = time()-t

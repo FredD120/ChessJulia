@@ -70,8 +70,6 @@ mutable struct SearchInfo
     Killers::Vector{Killer}
 end
 
-global TT = TranspositionTable(TTsize,SearchData)
-
 "Triangle number for an index starting from zero"
 triangle_number(x) = Int(0.5*x*(x+1))
 
@@ -79,7 +77,6 @@ triangle_number(x) = Int(0.5*x*(x+1))
 function SearchInfo(t_max,maxdepth=MAXDEPTH)
     triangular_PV = NULLMOVE*ones(UInt32,triangle_number(maxdepth))
     killers = [Killer() for _ in 1:maxdepth]
-    #println("TT size = $(round(sizeof(TT.HashTable)/1e6,sigdigits=4)) Mb")
     SearchInfo(time(),t_max,maxdepth,triangular_PV,0,0,killers)
 end
 
@@ -116,10 +113,24 @@ end
 "generic constructor for search data"
 SearchData() = SearchData(UInt64(0),UInt8(0),Int32(0),NONE,NULLMOVE)
 
+"create transposition table in global state so it persists between moves"
+global TT = TranspositionTable(TTSIZE,SearchData,true)
+
 "update entry in TT. currently always replace"
 function TT_store!(ZHash,depth,score,node_type,best_move)
     new_data = SearchData(ZHash,depth,score,node_type,best_move)
     set_entry!(TT,new_data)
+end
+
+"retrieve TT entry, returning nothing if there is no entry"
+function TT_retrieve!(ZHash)
+    TT_data = get_entry(TT,ZHash)
+    #no point using TT if hash collision
+    if TT_data.ZHash == ZHash
+        return TT_data
+    else
+        return nothing
+    end
 end
 
 mutable struct Logger
@@ -349,9 +360,8 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     if onPV
         best_move = info.PV[ply+1]
     else
-        TT_data = get_entry(TT,board.ZHash)
-        #no point using TT if hash collision
-        if TT_data.ZHash == board.ZHash
+        TT_data = TT_retrieve!(board.ZHash)
+        if !isnothing(TT_data)
             #don't try to cutoff if depth of TT entry is too low
             if TT_data.depth >= depth 
                 if TT_data.type == EXACT
@@ -508,7 +518,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
         Depth = $((logger.cur_depth)). \
         Max ply = $(logger.seldepth). \
         TT cuts = $(logger.TT_cut). \
-        Time = $(round(δt,sigdigits=6))s.)")
+        Time = $(round(δt,sigdigits=6))s.")
 
         if logger.stopmidsearch
             println("Ran out of time mid search.")

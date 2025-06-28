@@ -156,11 +156,20 @@ function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
     check_win(logicstate)
 end
 
+"JIT compile bot"
+function warmup(FEN)
+    board = Boardstate(FEN)
+    move = bot.best_move(board,1.0)
+end
+
 function main()
     #SDL_Quit()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-
+    
     vsbot = true
+    if vsbot
+        warmup(FEN)
+    end
     logicstate = Boardstate(FEN)
     position = GUIposition(logicstate)
     legal_moves = generate_moves(logicstate)

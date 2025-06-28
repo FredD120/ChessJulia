@@ -3,7 +3,7 @@ using logic
 using Profile
 
 const profil = false
-const MAXTIME = 0.1
+const MAXTIME = 0.5
 const expensive = false
 
 function test_eval()

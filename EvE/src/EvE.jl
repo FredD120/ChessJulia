@@ -8,7 +8,7 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 1.0
+const MAXTIME = 0.2
 
 "Cumulative data from loggers for whole match"
 mutable struct Tracker
@@ -82,6 +82,14 @@ function evaluate_game!(score,board,P1_side)
     end
     println(str)
     return str
+end
+
+"JIT compile bot1 and bot2"
+function warmup()
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    board = Boardstate(FEN)
+    move1 = bot1.best_move(board,1.0)
+    move2 = bot2.best_move(board,1.0)
 end
 
 "Play a game bot vs bot - modifies boardstate"
@@ -184,6 +192,8 @@ end
 function main()
     #Win, draw, loss of player 1
     score = [0,0,0]
+
+    warmup()
 
     FENstrings = get_FENs()
 

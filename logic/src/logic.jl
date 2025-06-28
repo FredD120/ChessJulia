@@ -1557,9 +1557,12 @@ struct TranspositionTable{T}
 end
 
 "construct TT using its size in bits and type of data stored. return nothing if length = 0"
-function TranspositionTable(size::Integer,type)::Union{TranspositionTable,Nothing}
+function TranspositionTable(size::Integer,type,verbose=false)::Union{TranspositionTable,Nothing}
     if size > 0
         hash_table = [type() for _ in 1:2^size]
+        if verbose
+            println("TT size = $(round(sizeof(hash_table)/1e6,sigdigits=4)) Mb")
+        end
         return TranspositionTable(UInt8(64-size),hash_table)
     end
     return nothing
