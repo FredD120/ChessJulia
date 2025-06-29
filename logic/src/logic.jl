@@ -24,7 +24,7 @@ NOFLAG, KCASTLE, QCASTLE, EPFLAG, PROMQUEEN, PROMROOK, PROMBISHOP,
 PROMKNIGHT, DPUSH, ally_pieces, enemy_pieces, identify_locations, count_pieces,
 NULLMOVE, rank, file, pc_type, cap_type, from, to, flag, LSB, sgn, side_index,
 ColourPieceID, generate_attacks, gameover!,Opposite, score, set_score, iscapture,
-TranspositionTable, get_entry, set_entry!, PerftData, generate_hash
+TranspositionTable, get_entry, set_entry!, PerftData, generate_hash, view_entry
 
 using InteractiveUtils
 using JLD2
@@ -1552,9 +1552,21 @@ end
 
 "hold hash table and bitshift to get index from zobrist hash"
 struct TranspositionTable{T}
-    Shift::UInt8
+    Key::UInt64
     HashTable::Vector{T}
 end
+
+"bitmask for first num binary digits of 64 bit int"
+function bitmask(num)
+    mask = UInt64(0)
+    for i in 0:num-1
+        mask |= UInt(1) << i
+    end
+    return mask
+end
+
+"shift for 64 bit integers"
+bitshift(num) = UInt64(64-num)
 
 "construct TT using its size in bits and type of data stored. return nothing if length = 0"
 function TranspositionTable(size::Integer,type,verbose=false)::Union{TranspositionTable,Nothing}
@@ -1563,18 +1575,32 @@ function TranspositionTable(size::Integer,type,verbose=false)::Union{Transpositi
         if verbose
             println("TT size = $(round(sizeof(hash_table)/1e6,sigdigits=4)) Mb")
         end
-        return TranspositionTable(UInt8(64-size),hash_table)
+        return TranspositionTable(bitmask(size),hash_table)
     end
     return nothing
 end
 
 "retrieve transposition from TT using index derived from bitshift"
-get_entry(TT::TranspositionTable,Zhash::UInt64) = TT.HashTable[(Zhash>>TT.Shift)+1]
+get_entry(TT::TranspositionTable,Zhash::UInt64) = TT.HashTable[ZKey_mask(Zhash,TT.Key)+1]
+
+"use zhash and bitshift to make zkey into TT"
+ZKey_shift(ZHash,shift) = ZHash>>shift
+
+"use zhash and bitmask to make zkey into TT"
+ZKey_mask(ZHash,mask) = ZHash&mask
 
 "set value of entry in TT"
 function set_entry!(TT::TranspositionTable,data) 
-    TT.HashTable[(data.ZHash>>TT.Shift)+1] = data
+    TT.HashTable[ZKey_mask(data.ZHash,TT.Key)+1] = data
 end
+
+"set value of entry in TT using zhash provided"
+function set_entry!(TT::TranspositionTable,ZHash,data) 
+    TT.HashTable[ZKey_mask(ZHash,TT.Key)+1] = data
+end
+
+"return a view into the TT that can be used to modify the entry"
+view_entry(TT::TranspositionTable,ZHash) = @view TT.HashTable[ZKey_mask(ZHash,TT.Key)+1]
 
 "hold data required for perft"
 struct PerftData

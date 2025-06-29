@@ -39,7 +39,6 @@ const INF::Int32 = typemax(Int32)
 #maximum search depth
 const MAXDEPTH::UInt8 = UInt8(12)
 const MINDEPTH::UInt8 = UInt8(0)
-const TTSIZE::UInt8 = UInt8(21)
 
 "Store two best quiet moves for a given ply"
 mutable struct Killer
@@ -113,24 +112,43 @@ end
 "generic constructor for search data"
 SearchData() = SearchData(UInt64(0),UInt8(0),Int32(0),NONE,NULLMOVE)
 
+"store multiple entries at same Zkey, with different replace schemes"
+mutable struct Bucket
+    Depth::SearchData
+    Always::SearchData
+end
+"construct bucket with two entries"
+Bucket() = Bucket(SearchData(),SearchData())
+
+const TTSIZE::UInt8 = UInt8(20)
 "create transposition table in global state so it persists between moves"
-global TT = TranspositionTable(TTSIZE,SearchData,true)
+const TT = TranspositionTable(TTSIZE,Bucket,true)
 
 "update entry in TT. currently always replace"
 function TT_store!(ZHash,depth,score,node_type,best_move)
-    new_data = SearchData(ZHash,depth,score,node_type,best_move)
-    set_entry!(TT,new_data)
+    if !isnothing(TT)
+        TT_view = view_entry(TT,ZHash)
+        new_data = SearchData(ZHash,depth,score,node_type,best_move)
+        if depth >= TT_view[].Depth.depth
+            TT_view[].Depth = new_data
+        else
+            TT_view[].Always = new_data
+        end
+    end
 end
 
 "retrieve TT entry, returning nothing if there is no entry"
 function TT_retrieve!(ZHash)
-    TT_data = get_entry(TT,ZHash)
-    #no point using TT if hash collision
-    if TT_data.ZHash == ZHash
-        return TT_data
-    else
-        return nothing
+    if !isnothing(TT)
+        bucket = get_entry(TT,ZHash)
+        #no point using TT if hash collision
+        if bucket.Depth.ZHash == ZHash
+            return bucket.Depth
+        elseif bucket.Always.ZHash == ZHash
+            return bucket.Always
+        end
     end
+    return nothing
 end
 
 mutable struct Logger

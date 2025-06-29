@@ -717,7 +717,6 @@ test_perft()
 
 function test_TT()
     TT = TranspositionTable(4,PerftData)
-    @assert TT.Shift == 60
     for Data in TT.HashTable
         @assert Data.ZHash == 0
         @assert Data.depth == 0
