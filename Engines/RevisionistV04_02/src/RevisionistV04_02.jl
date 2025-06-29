@@ -1,4 +1,4 @@
-module RevisionistV04_01
+module RevisionistV04_02
 
 #=
 CURRENT
@@ -24,7 +24,6 @@ TO-DO
 TO THINK ABOUT
 #When adding extensions, eg.for checks, we will exceed PV triangular ply and Killer ply
 #Need to check for FIDE draws like KNk,KBk as well as unforcable draws like KNkb
-#making score an Int16 would fit better in TT
 =#
 
 using logic
@@ -114,14 +113,15 @@ end
 SearchData() = SearchData(UInt64(0),UInt8(0),Int16(0),NONE,NULLMOVE)
 
 "store multiple entries at same Zkey, with different replace schemes"
-mutable struct Bucket
-    Depth::SearchData
-    Always::SearchData
+struct Bucket
+    Entries::Vector{SearchData}
 end
-"construct bucket with two entries"
-Bucket() = Bucket(SearchData(),SearchData())
 
-const TTSIZE::UInt8 = UInt8(18)
+const BUCKET_ENTRIES = 4
+"construct bucket with two entries"
+Bucket() = Bucket([SearchData() for _ in 1:BUCKET_ENTRIES])
+
+const TTSIZE::UInt8 = UInt8(20)
 "create transposition table in global state so it persists between moves"
 const TT = TranspositionTable(TTSIZE,Bucket,true)
 
@@ -142,11 +142,18 @@ function TT_store!(ZHash,depth,score,node_type,best_move)
         #correct mate scores in TT
         score = correct_score(score,depth,-1)
         new_data = SearchData(ZHash,depth,score,node_type,best_move)
-        if depth >= TT_view[].Depth.depth
-            TT_view[].Depth = new_data
-        else
-            TT_view[].Always = new_data
+
+        min_depth_ind = 1
+        cur_min_depth = 1000
+        for (i,entry) in enumerate(TT_view[].Entries)
+            if entry.depth < cur_min_depth
+                min_depth_ind = i
+                cur_min_depth = entry.depth
+            end
         end
+
+        #always replace lowest depth entry in bucket
+        TT_view[].Entries[min_depth_ind] = new_data
     end
 end
 
@@ -154,12 +161,18 @@ end
 function TT_retrieve!(ZHash,cur_depth)
     if !isnothing(TT)
         bucket = get_entry(TT,ZHash)
-        #no point using TT if hash collision
-        if bucket.Depth.ZHash == ZHash
-            return bucket.Depth, correct_score(bucket.Depth.score,cur_depth,+1)
-        elseif bucket.Always.ZHash == ZHash
-            return bucket.Always, correct_score(bucket.Always.score,cur_depth,+1)
+       
+        cur_best_ind = 1
+        highest_depth = 0
+        for (i,entry) in enumerate(bucket.Entries)
+            if entry.depth > highest_depth
+                highest_depth = entry.depth 
+                cur_best_ind = i 
+            end
         end
+
+        ent = bucket.Entries[cur_best_ind]
+        return ent, correct_score(ent.score,cur_depth,+1)
     end
     return nothing,nothing
 end

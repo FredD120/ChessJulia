@@ -1573,7 +1573,8 @@ function TranspositionTable(size::Integer,type,verbose=false)::Union{Transpositi
     if size > 0
         hash_table = [type() for _ in 1:2^size]
         if verbose
-            println("TT size = $(round(sizeof(hash_table)/1e6,sigdigits=4)) Mb")
+            entry_size = sizeof(type())
+            println("TT size = $(round(entry_size*2^size/(1024^2),sigdigits=4)) Mb")
         end
         return TranspositionTable(bitmask(size),hash_table)
     end
