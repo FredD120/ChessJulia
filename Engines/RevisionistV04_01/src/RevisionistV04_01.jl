@@ -11,9 +11,9 @@ CURRENT
     -Killer moves
 -> Quiescence search
 -> Check extension
+-> Transposition table
 
 TO-DO
--> Transposition table
 -> Null move pruning
 -> Delta/futility pruning
 -> PVS
@@ -34,10 +34,11 @@ export best_move,evaluate,eval,side_index,MGweighting,EGweighting,
        Logger,swap!,next_best!,score_moves!, Killer, new_killer!
 
 #define evaluation constants
-const INF::Int32 = typemax(Int32)
+const INF::Int16 = typemax(Int16)
+const MATE::Int16 = INF - Int16(100)
 
 #maximum search depth
-const MAXDEPTH::UInt8 = UInt8(12)
+const MAXDEPTH::UInt8 = UInt8(16)
 const MINDEPTH::UInt8 = UInt8(0)
 
 "Store two best quiet moves for a given ply"
@@ -104,13 +105,13 @@ const EXACT = UInt8(3)
 struct SearchData
     ZHash::UInt64
     depth::UInt8
-    score::Int32
+    score::Int16
     type::UInt8
     move::UInt32
 end
 
 "generic constructor for search data"
-SearchData() = SearchData(UInt64(0),UInt8(0),Int32(0),NONE,NULLMOVE)
+SearchData() = SearchData(UInt64(0),UInt8(0),Int16(0),NONE,NULLMOVE)
 
 "store multiple entries at same Zkey, with different replace schemes"
 mutable struct Bucket
@@ -124,10 +125,22 @@ const TTSIZE::UInt8 = UInt8(20)
 "create transposition table in global state so it persists between moves"
 const TT = TranspositionTable(TTSIZE,Bucket,true)
 
+"add depth to score when storing and remove when retrieving"
+function correct_score(score,depth,sgn)::Int16
+    if score > MATE
+        score += Int16(sgn*depth)
+    elseif score < -MATE
+        score -= Int16(sgn*depth)
+    end
+    return score
+end
+
 "update entry in TT. currently always replace"
 function TT_store!(ZHash,depth,score,node_type,best_move)
     if !isnothing(TT)
         TT_view = view_entry(TT,ZHash)
+        #correct mate scores in TT
+        score = correct_score(score,depth,-1)
         new_data = SearchData(ZHash,depth,score,node_type,best_move)
         if depth >= TT_view[].Depth.depth
             TT_view[].Depth = new_data
@@ -138,21 +151,21 @@ function TT_store!(ZHash,depth,score,node_type,best_move)
 end
 
 "retrieve TT entry, returning nothing if there is no entry"
-function TT_retrieve!(ZHash)
+function TT_retrieve!(ZHash,cur_depth)
     if !isnothing(TT)
         bucket = get_entry(TT,ZHash)
         #no point using TT if hash collision
         if bucket.Depth.ZHash == ZHash
-            return bucket.Depth
+            return bucket.Depth, correct_score(bucket.Depth.score,cur_depth,+1)
         elseif bucket.Always.ZHash == ZHash
-            return bucket.Always
+            return bucket.Always, correct_score(bucket.Always.score,cur_depth,+1)
         end
     end
-    return nothing
+    return nothing,nothing
 end
 
 mutable struct Logger
-    best_score::Int32
+    best_score::Int16
     pos_eval::Int32
     cum_nodes::Int32
     nodes::Int32
@@ -167,34 +180,36 @@ end
 Logger() = Logger(0,0,0,0,0,0,false,"",0,0)
 
 "Constant evaluation of stalemate"
-eval(::Draw,ply) = Int32(0)
+eval(::Draw,ply) = Int16(0)
 "Constant evaluation of being checkmated (favour quicker mates)"
-eval(::Loss,ply) = -INF + ply
+eval(::Loss,ply) = -INF + Int16(ply)
 
 #number of pieces left when endgame begins
 const EGBEGIN = 12
 
+const MG_grad = -1/(EGBEGIN+2)
+
 "If more than EGBEGIN+2 pieces lost, set to 0. Between 0 and EGBEGIN+2 pieces lost, decrease linearly from 1 to 0"
 function MGweighting(pc_remaining)::Float32 
     pc_lost = 24 - pc_remaining
-    grad = -1/(EGBEGIN+2)
-    weight = 1 + grad*pc_lost
+    weight = 1 + MG_grad*pc_lost
     return max(0,weight)
 end
 
+const EG_grad = -1/EGBEGIN
+
 "If more than EGBEGIN+2 pieces remaining, set to 0. Between EGBEGIN+2 and 2 remaining increase linearly to 1"
 function EGweighting(pc_remaining)::Float32 
-    grad = -1/EGBEGIN
-    weight = 1 + grad*(pc_remaining-2)
+    weight = 1 + EG_grad*(pc_remaining-2)
     return max(0,weight)
 end
 
 "Returns score of current position from whites perspective"
-function evaluate(board::Boardstate)::Int32
+function evaluate(board::Boardstate)::Int16
     num_pieces = count_pieces(board.pieces)
     score = board.PSTscore[1]*MGweighting(num_pieces) + board.PSTscore[2]*EGweighting(num_pieces)
     
-    return Int32(round(score))
+    return Int16(round(score))
 end
 
 #Score of PV/TT move = 255
@@ -378,17 +393,17 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     if onPV
         best_move = info.PV[ply+1]
     else
-        TT_data = TT_retrieve!(board.ZHash)
+        TT_data,TT_score = TT_retrieve!(board.ZHash,depth)
         if !isnothing(TT_data)
             #don't try to cutoff if depth of TT entry is too low
             if TT_data.depth >= depth 
                 if TT_data.type == EXACT
                     logger.TT_cut += 1
-                    return TT_data.score
-                elseif TT_data.type == BETA && TT_data.score >= β
+                    return TT_score
+                elseif TT_data.type == BETA && TT_score >= β
                     logger.TT_cut += 1
                     return β
-                elseif TT_data.type == ALPHA && TT_data.score <= α 
+                elseif TT_data.type == ALPHA && TT_score <= α 
                     logger.TT_cut += 1
                     return α
                 end
