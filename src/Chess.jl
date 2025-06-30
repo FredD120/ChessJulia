@@ -1,8 +1,10 @@
 using chessGUI
 using logic
-import RevisionistV04_02 as bot
+import RevisionistV04_03 as bot
+import RevisionistV04_01 as bot2
 
-const BOTTIME = 0.2
+const BOTTIME = 1.0
+const two_bots = false
 
 "update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
@@ -116,6 +118,16 @@ end
 
 "tell GUI what to do when mouse pressed"
 function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
+    if two_bots==true && vsBOT == true
+        move,log = bot2.best_move(logicstate,BOTTIME,true)
+        make_move!(move,logicstate)
+        check_win(logicstate)
+        move2,log = bot.best_move(logicstate,BOTTIME,true)
+        make_move!(move2,logicstate)
+        GUIst.position = GUIposition(logicstate)
+        return nothing
+    end
+
     mouse_evt = getproperty(evt,:button)
     xpos = getproperty(mouse_evt,:x)
     ypos = getproperty(mouse_evt,:y)
@@ -160,6 +172,9 @@ end
 function warmup(FEN)
     board = Boardstate(FEN)
     move = bot.best_move(board,3.0)
+    if two_bots
+     move = bot2.best_move(board,3.0)
+    end
 end
 
 function main()

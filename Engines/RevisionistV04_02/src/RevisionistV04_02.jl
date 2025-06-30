@@ -1,4 +1,7 @@
 module RevisionistV04_02
+###############
+#NOT ON BRANCH#
+###############
 
 #=
 CURRENT
@@ -11,7 +14,7 @@ CURRENT
     -Killer moves
 -> Quiescence search
 -> Check extension
--> Transposition table
+-> Transposition table - N entry buckets
 
 TO-DO
 -> Null move pruning
@@ -123,7 +126,7 @@ const BUCKET_ENTRIES = 4
 "construct bucket with two entries"
 Bucket() = Bucket([SearchData() for _ in 1:BUCKET_ENTRIES])
 
-const TTSIZE::UInt8 = UInt8(0)
+const TTSIZE::UInt8 = UInt8(21)
 "create transposition table in global state so it persists between moves"
 const TT = TranspositionTable(TTSIZE,Bucket,true)
 const TT_ENTRIES = BUCKET_ENTRIES*2^TTSIZE

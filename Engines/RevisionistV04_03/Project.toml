@@ -1,0 +1,13 @@
+name = "RevisionistV04_03"
+uuid = "403a440e-0551-40af-bd9f-ce36b41a2b46"
+version = "0.4.3"
+
+[deps]
+Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+logic = "71af330d-9551-40af-bd9f-dd36b4d12b46"
+
+[compat]
+Profile = "1.11.0"
+StaticArrays = "1.9.13"

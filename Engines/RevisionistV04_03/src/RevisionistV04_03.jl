@@ -1,4 +1,4 @@
-module RevisionistV04_01
+module RevisionistV04_03
 
 #=
 CURRENT
@@ -12,11 +12,11 @@ CURRENT
 -> Quiescence search
 -> Check extension
 -> Transposition table
+-> PVS
 
 TO-DO
 -> Null move pruning
 -> Delta/futility pruning
--> PVS
 -> Texel tuned PSTs
 -> LMR + history
 -> NNUE
