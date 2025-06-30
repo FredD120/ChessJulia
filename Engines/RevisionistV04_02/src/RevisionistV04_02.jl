@@ -67,6 +67,7 @@ mutable struct SearchInfo
     PV_len::UInt8
     nodes_since_time::UInt16
     Killers::Vector{Killer}
+    TT_age::UInt16
 end
 
 "Triangle number for an index starting from zero"
@@ -76,7 +77,7 @@ triangle_number(x) = Int(0.5*x*(x+1))
 function SearchInfo(t_max,maxdepth=MAXDEPTH)
     triangular_PV = NULLMOVE*ones(UInt32,triangle_number(maxdepth))
     killers = [Killer() for _ in 1:maxdepth]
-    SearchInfo(time(),t_max,maxdepth,triangular_PV,0,0,killers)
+    SearchInfo(time(),t_max,maxdepth,triangular_PV,0,0,killers,cur_age)
 end
 
 "find index of PV move at current ply"
@@ -107,10 +108,11 @@ struct SearchData
     score::Int16
     type::UInt8
     move::UInt32
+    age::UInt16
 end
 
 "generic constructor for search data"
-SearchData() = SearchData(UInt64(0),UInt8(0),Int16(0),NONE,NULLMOVE)
+SearchData() = SearchData(UInt64(0),UInt8(0),Int16(0),NONE,NULLMOVE,UInt16(0))
 
 "store multiple entries at same Zkey, with different replace schemes"
 struct Bucket
@@ -121,9 +123,13 @@ const BUCKET_ENTRIES = 4
 "construct bucket with two entries"
 Bucket() = Bucket([SearchData() for _ in 1:BUCKET_ENTRIES])
 
-const TTSIZE::UInt8 = UInt8(20)
+const TTSIZE::UInt8 = UInt8(0)
 "create transposition table in global state so it persists between moves"
 const TT = TranspositionTable(TTSIZE,Bucket,true)
+const TT_ENTRIES = BUCKET_ENTRIES*2^TTSIZE
+
+global cur_TT_entries::Int32 = 0
+global cur_age::UInt16 = 0
 
 "add depth to score when storing and remove when retrieving"
 function correct_score(score,depth,sgn)::Int16
@@ -136,20 +142,24 @@ function correct_score(score,depth,sgn)::Int16
 end
 
 "update entry in TT. currently always replace"
-function TT_store!(ZHash,depth,score,node_type,best_move)
+function TT_store!(ZHash,depth,score,node_type,best_move,new_age,logger)
     if !isnothing(TT)
         TT_view = view_entry(TT,ZHash)
         #correct mate scores in TT
         score = correct_score(score,depth,-1)
-        new_data = SearchData(ZHash,depth,score,node_type,best_move)
+        new_data = SearchData(ZHash,depth,score,node_type,best_move,new_age)
 
         min_depth_ind = 1
         cur_min_depth = 1000
         for (i,entry) in enumerate(TT_view[].Entries)
-            if entry.depth < cur_min_depth
+            if entry.depth + (entry.age-new_age) < cur_min_depth
                 min_depth_ind = i
                 cur_min_depth = entry.depth
             end
+        end
+
+        if TT_view[].Entries[min_depth_ind].type == NONE
+            logger.hashfull += 1
         end
 
         #always replace lowest depth entry in bucket
@@ -165,7 +175,7 @@ function TT_retrieve!(ZHash,cur_depth)
         cur_best_ind = 1
         highest_depth = 0
         for (i,entry) in enumerate(bucket.Entries)
-            if entry.depth > highest_depth
+            if entry.depth > highest_depth && entry.ZHash == ZHash
                 highest_depth = entry.depth 
                 cur_best_ind = i 
             end
@@ -188,9 +198,10 @@ mutable struct Logger
     PV::String
     seldepth::UInt8
     TT_cut::Int32
+    hashfull::UInt32
 end
 
-Logger() = Logger(0,0,0,0,0,0,false,"",0,0)
+Logger() = Logger(0,0,0,0,0,0,false,"",0,0,0)
 
 "Constant evaluation of stalemate"
 eval(::Draw,ply) = Int16(0)
@@ -454,7 +465,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
                     new_killer!(info.Killers,ply,move)
                 end
 
-                TT_store!(board.ZHash,depth,score,BETA,move)
+                TT_store!(board.ZHash,depth,score,BETA,move,info.TT_age,logger)
                 return β
             end
             node_type = EXACT
@@ -465,7 +476,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
         end
     end
 
-    TT_store!(board.ZHash,depth,α,node_type,cur_best_move)
+    TT_store!(board.ZHash,depth,α,node_type,cur_best_move,info.TT_age,logger)
     return α
 end
 
@@ -542,6 +553,7 @@ end
 
 "Evaluates the position to return the best move"
 function best_move(board::Boardstate,T_MAX,logging=false)
+    global cur_age += 1
     t = time()
     best_move,logger = iterative_deepening(board,T_MAX,logging)
     δt = time() - t
@@ -555,7 +567,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
             best = logger.best_score > 0 ? "Engine Mate in $dist" : "Opponent Mate in $dist"
         end
 
-        #If we stopped midsearch, we still want to add to total nodes and nps (but not when calculating branching factor)
+        global cur_TT_entries += logger.hashfull
 
         println("Best = $(LONGmove(best_move)). \
         Score = "*best*". \
@@ -564,6 +576,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
         Depth = $((logger.cur_depth)). \
         Max ply = $(logger.seldepth). \
         TT cuts = $(logger.TT_cut). \
+        Hash full = $(round(cur_TT_entries*100/TT_ENTRIES,sigdigits=3))%. \
         Time = $(round(δt,sigdigits=6))s.")
 
         if logger.stopmidsearch

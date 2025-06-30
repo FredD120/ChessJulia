@@ -2,7 +2,7 @@ using chessGUI
 using logic
 import RevisionistV04_02 as bot
 
-const BOTTIME = 1.0
+const BOTTIME = 0.2
 
 "update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
@@ -159,13 +159,13 @@ end
 "JIT compile bot"
 function warmup(FEN)
     board = Boardstate(FEN)
-    move = bot.best_move(board,1.0)
+    move = bot.best_move(board,3.0)
 end
 
 function main()
     #SDL_Quit()
-    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    #FEN = "r1b2k2/1pp4p/3p2p1/pP1P4/2PN4/8/P5PP/4R1K1 w - - 0 24"
+    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    FEN = "r1b2k2/1pp4p/3p2p1/pP1P4/2PN4/8/P5PP/4R1K1 b - - 0 24"
     vsbot = true
     if vsbot
         warmup(FEN)

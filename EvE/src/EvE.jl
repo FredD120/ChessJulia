@@ -1,5 +1,5 @@
 import RevisionistV03_08 as bot1
-import RevisionistV04_01 as bot2
+import RevisionistV04_02 as bot2
 using logic
 using HDF5
 
@@ -8,7 +8,7 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 0.5
+const MAXTIME = 0.2
 
 "Cumulative data from loggers for whole match"
 mutable struct Tracker
@@ -88,8 +88,8 @@ end
 function warmup()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     board = Boardstate(FEN)
-    move1 = bot1.best_move(board,1.0)
-    move2 = bot2.best_move(board,1.0)
+    move1 = bot1.best_move(board,2.0)
+    move2 = bot2.best_move(board,2.0)
 end
 
 "Play a game bot vs bot - modifies boardstate"
@@ -193,8 +193,6 @@ function main()
     #Win, draw, loss of player 1
     score = [0,0,0]
 
-    warmup()
-
     FENstrings = get_FENs()
 
     name = "$(bot1)__VS__$(bot2).h5"
@@ -205,6 +203,7 @@ function main()
     num = 0
     total = length(FENstrings)
     Threads.@threads for (game_num,FEN) in collect(enumerate(FENstrings))
+        warmup()
         println("Playing FEN: $FEN")
         trackers[game_num] = match!(score,FEN)
         num += 1
