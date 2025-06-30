@@ -39,7 +39,6 @@ const MATE::Int16 = INF - Int16(100)
 
 #maximum search depth
 const MAXDEPTH::UInt8 = UInt8(16)
-const MINDEPTH::UInt8 = UInt8(0)
 
 "Store two best quiet moves for a given ply"
 mutable struct Killer
@@ -185,9 +184,11 @@ mutable struct Logger
     seldepth::UInt8
     TT_cut::Int32
     hashfull::UInt32
+    PVSfail::Int32
+    PVSwin::Int32
 end
 
-Logger() = Logger(0,0,0,0,0,0,false,"",0,0,0)
+Logger() = Logger(0,0,0,0,0,0,false,"",0,0,0,0,0)
 
 "Constant evaluation of stalemate"
 eval(::Draw,ply) = Int16(0)
@@ -393,7 +394,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
     end
 
     #enter quiescence search if at leaf node
-    if depth <= MINDEPTH
+    if depth <= 0
         logger.pos_eval += 1
         return quiescence(board,player,α,β,ply,info,logger)
     end
@@ -436,7 +437,22 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
         move = moves[i]
 
         make_move!(move,board)
-        score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
+        score = 0
+        #principle variation search -> assume PV move is correct and try to prove ourselves correct
+        if !onPV && depth > 1
+            #zero window search
+            score = -minimax(board,-player,-(α+1),-α,depth-1,ply+1,onPV,info,logger)
+            #if we failed to prove that this node is a cut-node, we must re-open window and search again
+            if score > α && score < β
+                score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
+                logger.PVSfail += 1
+            else
+                logger.PVSwin += 1
+            end
+        else
+            score = -minimax(board,-player,-β,-α,depth-1,ply+1,onPV,info,logger)
+        end
+
         unmake_move!(board)
 
         #only first search is on PV
@@ -476,6 +492,7 @@ function root(board,moves,depth,info::SearchInfo,logger::Logger)
     ply = 0
     #search PV first, only if it exists
     onPV = true 
+    window = Int16(50)
 
     #root node is always on PV
     score_moves!(moves,info.Killers[ply+1],info.PV[ply+1])
@@ -563,6 +580,7 @@ function best_move(board::Boardstate,T_MAX,logging=false)
         Max ply = $(logger.seldepth). \
         TT cuts = $(logger.TT_cut). \
         Hash full = $(round(cur_TT_entries*100/TT_ENTRIES,sigdigits=3))%. \
+        PVS success = $(round(logger.PVSwin*100/(logger.PVSfail+logger.PVSwin),sigdigits=3))%. \
         Time = $(round(δt,sigdigits=6))s.")
 
         if logger.stopmidsearch

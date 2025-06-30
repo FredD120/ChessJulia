@@ -179,8 +179,8 @@ end
 
 function main()
     #SDL_Quit()
-    #FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    FEN = "r1b2k2/1pp4p/3p2p1/pP1P4/2PN4/8/P5PP/4R1K1 b - - 0 24"
+    FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    #FEN = "r1b2k2/1pp4p/3p2p1/pP1P4/2PN4/8/P5PP/4R1K1 b - - 0 24"
     vsbot = true
     if vsbot
         warmup(FEN)
