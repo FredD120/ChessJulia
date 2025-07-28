@@ -1,11 +1,13 @@
 module chessGUI
 
 export startup,texture!,get_texture,load_pieces,is_dark_sq,const_colour,chessboard,
-colour_surface,click_sqs,board_coords,pixel_coords,render_pieces,main_loop,GUIstate
+colour_surface,click_sqs,board_coords,pixel_coords,render_pieces,main_loop,GUIstate,
+Game
 
 using SimpleDirectMediaLayer
 using SimpleDirectMediaLayer.LibSDL2
 using logic
+using Scylla
 
 "hold GUI information"
 mutable struct GUIstate
@@ -16,6 +18,13 @@ mutable struct GUIstate
     promoting::Bool
     counter::Int
 end
+
+mutable struct Game
+    logic::Boardstate
+    engine::Union{EngineState,Nothing}
+end
+
+Game(b::Boardstate) = Game(b,nothing)
 
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
@@ -152,7 +161,7 @@ function render_pieces(renderer,piece_width,position,tex_vec)
 end
 
 "display pieces and chessboard on screen. enable clicking to show and make legal moves"
-function main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,args...)
+function main_loop(on_button_press!,on_mouse_press!,game_state::Game,GUIst,args...)
     WIDTH = 800
     square_width = Int(WIDTH÷8)
     brown = [125, 62, 62, 255] 
@@ -175,9 +184,9 @@ function main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,args...)
                     close = true
                     break 
                 elseif UNMAKE & (evt_ty == SDL_KEYUP)
-                    on_button_press!(logicstate,GUIst,args...)
+                    on_button_press!(game_state,GUIst,args...)
                 elseif evt_ty == SDL_MOUSEBUTTONUP
-                   on_mouse_press!(evt,square_width,logicstate,GUIst,args...)
+                   on_mouse_press!(evt,square_width,game_state,GUIst,args...)
                 end
             end
 

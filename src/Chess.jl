@@ -1,10 +1,30 @@
 using chessGUI
 using logic
-import RevisionistV04_03 as bot
-import RevisionistV04_01 as bot2
+import Scylla as Sc
+import RevisionistV04_01 as bot
+import RevisionistV03_08 as bot2
 
 const BOTTIME = 1.0
+const verbose = true
 const two_bots = false
+
+function make!(move,board::Boardstate,engine::EngineState) 
+    logic.make_move!(move,board)
+    Scylla.make_move!(move,engine.board)
+end
+
+make!(move,board::Boardstate,engine::Nothing) = logic.make_move!(move,board)
+
+function unmake!(board::Boardstate,engine::EngineState) 
+    logic.unmake_move!(board)
+    Scylla.unmake_move!(engine.board)
+end
+
+unmake!(board::Boardstate,engine::Nothing) = logic.unmake_move!(board)
+
+best(board::Boardstate,engine::Nothing,local_bot) = local_bot.best_move(board,BOTTIME,verbose)[1]
+
+best(board::Boardstate,engine::EngineState,bot) = Scylla.best_move(engine,verbose,max_T=BOTTIME)[1]
 
 "update gui based on mouse click to indicate legal moves"
 function mouse_clicked(mouse_pos,legal_moves,kingpos)
@@ -25,7 +45,7 @@ function mouse_clicked(mouse_pos,legal_moves,kingpos)
     return highlight
 end
 
-function promote_move!(logicstate,GUIst,index,legal_moves,BOT)
+function promote_move!(game::Game,GUIst,index,legal_moves,BOT)
     promotype = [PROMQUEEN,PROMROOK,PROMBISHOP,PROMKNIGHT]
 
     moveID = findfirst(i->flag(i)==promotype[index],legal_moves)
@@ -46,7 +66,7 @@ function promote_squares(prompos,Whitemove,posit)
 end
 
 "update logic with move made and return true if trying to promote"
-function move_clicked!(logicstate,GUIst,move_from,mouse_pos,kingpos,legal_moves,BOT)
+function move_clicked!(game::Game,GUIst,move_from,mouse_pos,kingpos,legal_moves,BOT)
     for move in legal_moves
         if (to(move) == mouse_pos) & (from(move) == move_from)
             if (flag(move) == PROMQUEEN)|(flag(move) == PROMROOK)|(flag(move) == PROMBISHOP)|(flag(move) == PROMKNIGHT)
@@ -84,47 +104,46 @@ function check_win(logicstate::Boardstate)
         return false
     end
 end
-    
+
 "Encapsulates behaviour of PvP vs PvE"
-function GUImove!(move,board,GUIst,vsBOT)
-    make_move!(move,board)
+function GUImove!(move,game::Game,GUIst,vsBOT)
+    make!(move,game.logic,game.engine)
     if vsBOT && !check_win(board)
-        #JIT compile
-        if GUIst.counter == 0
-            botmove,log = bot.best_move(board,0.5)
-            GUIst.counter += 1
-        end
-        botmove,log = bot.best_move(board,BOTTIME,true)
-        make_move!(botmove,board)
+        botmove = best(game.board,game.engine,bot)
+        make!(botmove,game.logic,game.engine)
     end
 end
 
 "tell GUI what to do when button pressed"
-function on_button_press!(logicstate,GUIst,vsBOT)
+function on_button_press!(game::Game,GUIst,vsBOT)
     #step backwards in move history
-    unmake_move!(logicstate)
+    unmake!(game.board,game.engine)
     if vsBOT #need to undo bots turn as well
-        unmake_move!(logicstate) 
+        unmake!(game.board,game.engine) 
     end
 
     #update positions of pieces in GUI representation
-    GUIst.position = GUIposition(logicstate)
+    GUIst.position = GUIposition(game.board)
     #generate new set of moves
-    GUIst.legal_moves = generate_moves(logicstate)
+    GUIst.legal_moves = generate_moves(game.board)
     #reset square clicked on to nothing
     GUIst.highlight_moves = []
     GUIst.sq_clicked = -1
 end
 
+function BotvsBot(game::Game,GUIst)
+    move = best(game.board,game.engine,bot2)
+    make!(move,game.board,game.engine)
+    check_win(game.board)
+    move2 = best(game.board,game.engine,bot)
+    make!(move2,game.board,game.engine)
+    GUIst.position = GUIposition(game.board)
+end
+
 "tell GUI what to do when mouse pressed"
-function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
+function on_mouse_press!(evt,square_width,game::Game,GUIst,vsBOT)
     if two_bots==true && vsBOT == true
-        move,log = bot2.best_move(logicstate,BOTTIME,true)
-        make_move!(move,logicstate)
-        check_win(logicstate)
-        move2,log = bot.best_move(logicstate,BOTTIME,true)
-        make_move!(move2,logicstate)
-        GUIst.position = GUIposition(logicstate)
+        BotvsBot(game::Game,GUIst)
         return nothing
     end
 
@@ -132,7 +151,7 @@ function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
     xpos = getproperty(mouse_evt,:x)
     ypos = getproperty(mouse_evt,:y)
     mouse_pos = board_coords(xpos,ypos,square_width)
-    kingpos = trailing_zeros(ally_pieces(logicstate)[King])
+    kingpos = trailing_zeros(ally_pieces(game.board)[King])
 
     if (length(GUIst.highlight_moves) > 0)
         if mouse_pos in GUIst.highlight_moves
@@ -169,23 +188,27 @@ function on_mouse_press!(evt,square_width,logicstate,GUIst,vsBOT)
 end
 
 "JIT compile bot"
-function warmup(FEN)
-    board = Boardstate(FEN)
-    move = bot.best_move(board,3.0)
+function warmup(game::Game)
+    move = best(game.board,game.engine,bot)
     if two_bots
-     move = bot2.best_move(board,3.0)
+     move = best(game.board,game.engine,bot2)
     end
 end
 
 function main()
     #SDL_Quit()
     FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-    #FEN = "r1b2k2/1pp4p/3p2p1/pP1P4/2PN4/8/P5PP/4R1K1 b - - 0 24"
-    vsbot = true
-    if vsbot
-        warmup(FEN)
-    end
+    #FEN = "8/8/R7/pppppppk/5R1R/8/8/7K b - - 1 1"
+    vsbot = false
+
     logicstate = Boardstate(FEN)
+    engine = nothing#EngineState(FEN)
+    game = Game(logicstate,engine)
+
+#    if vsbot
+#        warmup(game)
+#    end
+
     position = GUIposition(logicstate)
     legal_moves = generate_moves(logicstate)
 
@@ -196,6 +219,6 @@ function main()
 
     GUIst = GUIstate(position,legal_moves,highlight_moves,sq_clicked,promoting,counter)
     
-    main_loop(on_button_press!,on_mouse_press!,logicstate,GUIst,vsbot)
+    main_loop(on_button_press!,on_mouse_press!,game,GUIst,vsbot)
 end
 main()

@@ -439,7 +439,7 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
         make_move!(move,board)
         score = 0
         #principle variation search -> assume PV move is correct and try to prove ourselves correct
-        if !onPV && depth > 1
+        if !onPV && depth > 1 
             #zero window search
             score = -minimax(board,-player,-(α+1),-α,depth-1,ply+1,onPV,info,logger)
             #if we failed to prove that this node is a cut-node, we must re-open window and search again
@@ -467,6 +467,10 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
                     new_killer!(info.Killers,ply,move)
                 end
 
+                if move == best_move
+                    logger.TT_cut += 1
+                end
+                
                 TT_store!(board.ZHash,depth,score,BETA,move,logger)
                 return β
             end

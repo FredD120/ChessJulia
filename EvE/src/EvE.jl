@@ -1,5 +1,5 @@
 import RevisionistV04_01 as bot1
-import RevisionistV04_03 as bot2
+import RevisionistV03_08 as bot2
 using logic
 using HDF5
 
@@ -8,7 +8,7 @@ using HDF5
 #Only works for V3 onwards as V1,V2 are not iterative deepening
 
 "Thinking time"
-const MAXTIME = 0.2
+const MAXTIME = 0.5
 
 "Cumulative data from loggers for whole match"
 mutable struct Tracker

@@ -38,7 +38,7 @@ const INF::Int16 = typemax(Int16)
 const MATE::Int16 = INF - Int16(100)
 
 #maximum search depth
-const MAXDEPTH::UInt8 = UInt8(16)
+const MAXDEPTH::UInt8 = UInt8(24)
 const MINDEPTH::UInt8 = UInt8(0)
 
 "Store two best quiet moves for a given ply"
@@ -273,7 +273,7 @@ function next_best!(moves,cur_ind)
     end
 end
 
-"Score moves based on PV, MVV-LVA and killers"
+"Score moves based on PV/TT move, MVV-LVA and killers"
 function score_moves!(moves,killers::Killer=Killer(),best_move::UInt32=NULLMOVE)
     for (i,move) in enumerate(moves)
         if move == best_move
@@ -449,6 +449,10 @@ function minimax(board::Boardstate,player::Int8,α,β,depth,ply,onPV::Bool,info:
                 #update killers if exceed β
                 if !iscapture(move)
                     new_killer!(info.Killers,ply,move)
+                end
+
+                if move == best_move
+                    logger.TT_cut += 1
                 end
 
                 TT_store!(board.ZHash,depth,score,BETA,move,logger)
