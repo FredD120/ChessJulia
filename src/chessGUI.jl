@@ -1,14 +1,3 @@
-module chessGUI
-
-export startup,texture!,get_texture,load_pieces,is_dark_sq,const_colour,chessboard,
-colour_surface,click_sqs,board_coords,pixel_coords,render_pieces,main_loop,GUIstate,
-Game
-
-using SimpleDirectMediaLayer
-using SimpleDirectMediaLayer.LibSDL2
-using logic
-using Scylla
-
 "hold GUI information"
 mutable struct GUIstate
     position::Vector{UInt8}
@@ -20,11 +9,11 @@ mutable struct GUIstate
 end
 
 mutable struct Game
-    logic::Boardstate
-    engine::Union{EngineState,Nothing}
+    logic::logic.Boardstate
+    engine::Union{Sc.EngineState,Nothing}
 end
 
-Game(b::Boardstate) = Game(b,nothing)
+Game(b::logic.Boardstate) = Game(b,nothing)
 
 "initialise window and renderer in SDL"
 function startup(WIDTH=1000,HEIGHT=1000)
@@ -216,5 +205,3 @@ function main_loop(on_button_press!,on_mouse_press!,game_state::Game,GUIst,args.
         SDL_Quit()
     end
 end
-
-end #module
